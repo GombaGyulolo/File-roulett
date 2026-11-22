@@ -1,0 +1,2324 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Random File Roulette — PC File Explorer & Opener</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <!-- Google Fonts: Inter & JetBrains Mono -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        brand: {
+                            500: '#6366f1',
+                            600: '#4f46e5',
+                            400: '#818cf8'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            background-color: #090d16;
+            color: #f1f5f9;
+            overflow-x: hidden;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 9999px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+
+        /* Roulette Slot Glow & Animation */
+        .roulette-window {
+            background: linear-gradient(180deg, rgba(15,23,42,0.95) 0%, rgba(30,41,59,0.4) 50%, rgba(15,23,42,0.95) 100%);
+            box-shadow: inset 0 0 35px rgba(0, 0, 0, 0.85), 0 0 25px rgba(99, 102, 241, 0.15);
+        }
+
+        .roulette-active-glow {
+            box-shadow: inset 0 0 35px rgba(0, 0, 0, 0.85), 0 0 40px rgba(139, 92, 246, 0.45);
+            border-color: #818cf8 !important;
+        }
+
+        .winner-glow {
+            box-shadow: 0 0 45px rgba(16, 185, 129, 0.35);
+            border-color: #10b981 !important;
+        }
+
+        @keyframes pulse-slow {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.03); }
+        }
+        .spin-btn-pulse {
+            animation: pulse-slow 2.5s infinite ease-in-out;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col font-sans antialiased selection:bg-indigo-500 selection:text-white">
+
+    <!-- Toast Notification Container -->
+    <div id="toastContainer" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+    <!-- Top Navigation Bar -->
+    <header class="border-b border-slate-800/80 bg-slate-900/75 backdrop-blur-md sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+            <!-- Brand Logo -->
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+                    <i class="fa-solid fa-dice text-white text-xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-lg font-extrabold tracking-tight bg-gradient-to-r from-white via-slate-200 to-indigo-300 bg-clip-text text-transparent">
+                        Random File Roulette
+                    </h1>
+                    <p class="text-xs text-slate-400 hidden sm:block">Pick, spin & preview a random file from any folder on your PC</p>
+                </div>
+            </div>
+
+            <!-- Main Mode Switcher Tabs -->
+            <div class="flex items-center gap-1.5 bg-slate-950/90 p-1.5 rounded-xl border border-slate-800">
+                <button id="tabWebApp" onclick="switchMainTab('webapp')" class="px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all flex items-center gap-2 bg-indigo-600 text-white shadow">
+                    <i class="fa-solid fa-sliders"></i>
+                    <span>Solo Roulette</span>
+                </button>
+                <button id="tabMultiplayer" onclick="switchMainTab('multiplayer')" class="px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all flex items-center gap-2 text-slate-400 hover:text-white hover:bg-slate-800/60">
+                    <i class="fa-solid fa-gavel text-rose-400"></i>
+                    <span>Multiplayer Tribunal</span>
+                    <span class="px-1.5 py-0.2 text-[10px] font-extrabold bg-rose-500/20 text-rose-300 border border-rose-500/30 rounded-full">2/3 VOTE</span>
+                </button>
+                <button id="tabNativeScript" onclick="switchMainTab('native')" class="px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all flex items-center gap-2 text-slate-400 hover:text-white hover:bg-slate-800/60">
+                    <i class="fa-brands fa-python text-amber-400"></i>
+                    <span>Desktop Script</span>
+                </button>
+            </div>
+
+            <!-- Sound & Demo Controls -->
+            <div class="flex items-center gap-2">
+                <button id="soundToggleBtn" onclick="toggleSound()" title="Toggle Roulette Sound Effects" class="p-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700/60 transition">
+                    <i id="soundIcon" class="fa-solid fa-volume-high text-indigo-400"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- ========================================== -->
+    <!-- TAB 1: WEB APP ROULETTE                    -->
+    <!-- ========================================== -->
+    <main id="viewWebApp" class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+            <!-- LEFT SIDEBAR: Folder Selection & Filters (4 cols) -->
+            <div class="lg:col-span-4 space-y-6">
+
+                <!-- 1. Folder Selection Card -->
+                <section class="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-xl">
+                    <div class="flex items-center justify-between mb-3">
+                        <h2 class="text-sm font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                            <i class="fa-solid fa-folder-open text-indigo-400"></i> 1. Select PC Folder
+                        </h2>
+                        <span id="folderStatusBadge" class="text-[11px] font-medium px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700">
+                            No Folder Loaded
+                        </span>
+                    </div>
+
+                    <!-- Hidden standard fallback directory input -->
+                    <input type="file" id="fallbackDirInput" webkitdirectory directory multiple class="hidden" onchange="handleFallbackFiles(this.files)">
+
+                    <!-- Dropzone / Primary Trigger Button -->
+                    <div id="folderDropzone" 
+                         onclick="triggerFolderSelection()"
+                         class="group cursor-pointer border-2 border-dashed border-slate-700 hover:border-indigo-500 bg-slate-950/60 hover:bg-indigo-950/20 transition-all rounded-xl p-5 text-center">
+                        <div class="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 group-hover:bg-indigo-500/20 group-hover:scale-105 transition flex items-center justify-center mx-auto mb-3">
+                            <i class="fa-solid fa-folder-plus text-2xl text-indigo-400"></i>
+                        </div>
+                        <p class="text-sm font-semibold text-white group-hover:text-indigo-300 transition">
+                            Choose Folder from PC
+                        </p>
+                        <p class="text-xs text-slate-400 mt-1">
+                            Scans subfolders locally in your browser (100% private)
+                        </p>
+                    </div>
+
+                    <!-- Alternative buttons: Modern API vs Sample Demo Mode -->
+                    <div class="grid grid-cols-2 gap-2 mt-3">
+                        <button onclick="useModernDirectoryPicker()" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700/80 text-xs font-medium text-slate-300 border border-slate-700/80 transition flex items-center justify-center gap-1.5" title="Uses HTML5 File System Access API where supported">
+                            <i class="fa-solid fa-bolt text-amber-400"></i> Modern API Picker
+                        </button>
+                        <button onclick="loadDemoFiles()" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700/80 text-xs font-medium text-slate-300 border border-slate-700/80 transition flex items-center justify-center gap-1.5" title="Test the roulette immediately with virtual sample files">
+                            <i class="fa-solid fa-wand-magic-sparkles text-purple-400"></i> Try Demo Folder
+                        </button>
+                    </div>
+
+                    <!-- Folder Breakdown Stats -->
+                    <div id="statsContainer" class="mt-5 pt-4 border-t border-slate-800/80">
+                        <div class="flex items-center justify-between text-xs mb-2.5">
+                            <span class="text-slate-400 font-medium">Total Scanned Files:</span>
+                            <span id="statTotalScanned" class="font-mono font-bold text-white text-sm">0</span>
+                        </div>
+                        <div class="grid grid-cols-3 gap-2 text-center">
+                            <div class="bg-slate-950/80 border border-slate-800/90 rounded-lg p-2">
+                                <i class="fa-regular fa-image text-pink-400 text-xs"></i>
+                                <div id="countImages" class="font-mono text-xs font-bold text-white mt-0.5">0</div>
+                                <div class="text-[10px] text-slate-400">Images</div>
+                            </div>
+                            <div class="bg-slate-950/80 border border-slate-800/90 rounded-lg p-2">
+                                <i class="fa-solid fa-film text-purple-400 text-xs"></i>
+                                <div id="countVideos" class="font-mono text-xs font-bold text-white mt-0.5">0</div>
+                                <div class="text-[10px] text-slate-400">Videos</div>
+                            </div>
+                            <div class="bg-slate-950/80 border border-slate-800/90 rounded-lg p-2">
+                                <i class="fa-solid fa-music text-amber-400 text-xs"></i>
+                                <div id="countAudio" class="font-mono text-xs font-bold text-white mt-0.5">0</div>
+                                <div class="text-[10px] text-slate-400">Audio</div>
+                            </div>
+                            <div class="bg-slate-950/80 border border-slate-800/90 rounded-lg p-2">
+                                <i class="fa-solid fa-code text-emerald-400 text-xs"></i>
+                                <div id="countCode" class="font-mono text-xs font-bold text-white mt-0.5">0</div>
+                                <div class="text-[10px] text-slate-400">Text/Code</div>
+                            </div>
+                            <div class="bg-slate-950/80 border border-slate-800/90 rounded-lg p-2">
+                                <i class="fa-regular fa-file-pdf text-rose-400 text-xs"></i>
+                                <div id="countDocs" class="font-mono text-xs font-bold text-white mt-0.5">0</div>
+                                <div class="text-[10px] text-slate-400">PDF/Docs</div>
+                            </div>
+                            <div class="bg-slate-950/80 border border-slate-800/90 rounded-lg p-2">
+                                <i class="fa-regular fa-file text-sky-400 text-xs"></i>
+                                <div id="countOthers" class="font-mono text-xs font-bold text-white mt-0.5">0</div>
+                                <div class="text-[10px] text-slate-400">Others</div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 2. Filter Controls Card -->
+                <section class="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
+                    <div class="flex items-center justify-between">
+                        <h2 class="text-sm font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                            <i class="fa-solid fa-filter text-indigo-400"></i> 2. Filter Pool
+                        </h2>
+                        <span class="text-xs font-mono text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-2.5 py-0.5 rounded-full">
+                            <span id="eligiblePoolCount">0</span> eligible
+                        </span>
+                    </div>
+
+                    <!-- Category Filter Pills -->
+                    <div>
+                        <label class="text-xs text-slate-400 block mb-2 font-medium">File Category</label>
+                        <div class="grid grid-cols-2 sm:grid-cols-3 gap-1.5" id="categoryFilterGroup">
+                            <button onclick="setCategoryFilter('all')" data-cat="all" class="cat-btn active-cat px-2.5 py-2 rounded-xl text-xs font-semibold border transition flex items-center justify-center gap-1.5 bg-indigo-600 text-white border-indigo-500">
+                                <i class="fa-solid fa-layer-group"></i> All
+                            </button>
+                            <button onclick="setCategoryFilter('image')" data-cat="image" class="cat-btn px-2.5 py-2 rounded-xl text-xs font-semibold border transition flex items-center justify-center gap-1.5 bg-slate-950 text-slate-300 border-slate-800 hover:border-slate-700">
+                                <i class="fa-regular fa-image text-pink-400"></i> Images
+                            </button>
+                            <button onclick="setCategoryFilter('video')" data-cat="video" class="cat-btn px-2.5 py-2 rounded-xl text-xs font-semibold border transition flex items-center justify-center gap-1.5 bg-slate-950 text-slate-300 border-slate-800 hover:border-slate-700">
+                                <i class="fa-solid fa-film text-purple-400"></i> Video
+                            </button>
+                            <button onclick="setCategoryFilter('audio')" data-cat="audio" class="cat-btn px-2.5 py-2 rounded-xl text-xs font-semibold border transition flex items-center justify-center gap-1.5 bg-slate-950 text-slate-300 border-slate-800 hover:border-slate-700">
+                                <i class="fa-solid fa-music text-amber-400"></i> Audio
+                            </button>
+                            <button onclick="setCategoryFilter('code')" data-cat="code" class="cat-btn px-2.5 py-2 rounded-xl text-xs font-semibold border transition flex items-center justify-center gap-1.5 bg-slate-950 text-slate-300 border-slate-800 hover:border-slate-700">
+                                <i class="fa-solid fa-code text-emerald-400"></i> Text/Code
+                            </button>
+                            <button onclick="setCategoryFilter('docs')" data-cat="docs" class="cat-btn px-2.5 py-2 rounded-xl text-xs font-semibold border transition flex items-center justify-center gap-1.5 bg-slate-950 text-slate-300 border-slate-800 hover:border-slate-700">
+                                <i class="fa-regular fa-file-pdf text-rose-400"></i> PDF/Docs
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Custom Extensions Input -->
+                    <div>
+                        <label for="customExtInput" class="text-xs text-slate-400 block mb-1.5 font-medium">
+                            Custom Extensions (optional, comma-separated)
+                        </label>
+                        <div class="relative">
+                            <input type="text" id="customExtInput" oninput="applyFilters()" placeholder="e.g. .mp4, .png, .py, .md" 
+                                   class="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 outline-none transition font-mono">
+                            <button onclick="clearCustomExt()" id="clearExtBtn" class="hidden absolute right-2.5 top-2 text-slate-500 hover:text-slate-300 text-xs">
+                                <i class="fa-solid fa-xmark"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Checkboxes / Toggles -->
+                    <div class="space-y-2.5 pt-2 border-t border-slate-800/80">
+                        <label class="flex items-center justify-between cursor-pointer group">
+                            <span class="text-xs text-slate-300 group-hover:text-white transition">Exclude hidden & system files (<code class="text-slate-400">.DS_Store</code>, <code class="text-slate-400">.*</code>)</span>
+                            <input type="checkbox" id="excludeHiddenToggle" checked onchange="applyFilters()" class="w-4 h-4 accent-indigo-500 rounded cursor-pointer">
+                        </label>
+
+                        <label class="flex items-center justify-between cursor-pointer group">
+                            <span class="text-xs text-slate-300 group-hover:text-white transition">Skip <code class="text-slate-400">node_modules</code>, <code class="text-slate-400">.git</code> & build folders</span>
+                            <input type="checkbox" id="excludeDevDirsToggle" checked onchange="applyFilters()" class="w-4 h-4 accent-indigo-500 rounded cursor-pointer">
+                        </label>
+
+                        <label class="flex items-center justify-between cursor-pointer group">
+                            <span class="text-xs text-slate-300 group-hover:text-white transition flex items-center gap-1.5">
+                                <span>No Repeats during session</span>
+                                <span class="text-[10px] bg-amber-500/15 text-amber-300 px-1.5 py-0.2 rounded">Unique</span>
+                            </span>
+                            <input type="checkbox" id="noRepeatsToggle" checked onchange="applyFilters()" class="w-4 h-4 accent-indigo-500 rounded cursor-pointer">
+                        </label>
+                    </div>
+                </section>
+            </div>
+
+            <!-- RIGHT MAIN AREA: Roulette Spinner, Previewer & History (8 cols) -->
+            <div class="lg:col-span-8 space-y-6">
+
+                <!-- 3. Roulette Slot Machine Stage -->
+                <section class="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-2xl relative overflow-hidden">
+                    <!-- Decorative ambient background glow -->
+                    <div class=" -top-24 -right-24 w-64 h-64 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none absolute"></div>
+                    <div class=" -bottom-24 -left-24 w-64 h-64 bg-purple-600/10 rounded-full blur-3xl pointer-events-none absolute"></div>
+
+                    <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
+                        <div class="flex items-center gap-2">
+                            <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
+                            <h2 class="text-sm font-bold uppercase tracking-wider text-slate-300">
+                                3. Random File Roulette Wheel
+                            </h2>
+                        </div>
+                        <span id="poolReadyStatus" class="text-xs text-slate-400">
+                            Select a folder or click "Try Demo Folder" to spin
+                        </span>
+                    </div>
+
+                    <!-- Slot Machine Display Window -->
+                    <div id="rouletteDisplayBox" class="roulette-window border-2 border-slate-700/80 rounded-2xl p-6 text-center transition-all duration-300 relative my-2">
+                        <!-- Top & Bottom Slot Indicators -->
+                        <div id="roulettePrevSlot" class="text-xs font-mono text-slate-600 truncate h-5 select-none transition-all">
+                            • • •
+                        </div>
+
+                        <!-- Main Active Slot Item -->
+                        <div class="my-3 py-3 px-4 rounded-xl bg-slate-950/70 border border-slate-800/80 flex flex-col items-center justify-center min-h-[104px]">
+                            <div id="slotCategoryIcon" class="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-400 text-2xl mb-2 transition-transform">
+                                <i class="fa-solid fa-dice-d20"></i>
+                            </div>
+                            <div id="slotFileName" class="text-lg sm:text-2xl font-extrabold text-white tracking-tight break-all line-clamp-1">
+                                Ready to Spin!
+                            </div>
+                            <div id="slotFilePath" class="text-xs font-mono text-slate-400 mt-1 truncate max-w-full">
+                                Pick a directory on the left or load demo files
+                            </div>
+                        </div>
+
+                        <div id="rouletteNextSlot" class="text-xs font-mono text-slate-600 truncate h-5 select-none transition-all">
+                            • • •
+                        </div>
+                    </div>
+
+                    <!-- Primary Action Bar -->
+                    <div class="mt-5 flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3">
+                        <button id="spinButton" onclick="spinRoulette()" 
+                                class="spin-btn-pulse flex-1 py-4 px-8 rounded-2xl bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-500 hover:via-purple-500 hover:to-pink-500 text-white font-extrabold text-base sm:text-lg shadow-xl shadow-indigo-600/30 border border-indigo-400/30 transition transform active:scale-95 flex items-center justify-center gap-3 cursor-pointer">
+                            <i id="spinBtnIcon" class="fa-solid fa-shuffle text-xl"></i>
+                            <span id="spinBtnText">SPIN &amp; OPEN RANDOM FILE</span>
+                        </button>
+
+                        <button id="instantPickBtn" onclick="spinRoulette(true)" title="Skip animation and pick immediately"
+                                class="py-4 px-5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-sm border border-slate-700 transition flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-bolt text-amber-400"></i>
+                            <span>Instant Pick</span>
+                        </button>
+                    </div>
+                </section>
+
+                <!-- 4. Built-in Instant File Previewer & External Launcher -->
+                <section id="previewSection" class="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-xl">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-800">
+                        <div class="flex items-center gap-3 min-w-0">
+                            <div id="previewFileBadge" class="w-10 h-10 rounded-xl bg-slate-800 flex items-center justify-center text-slate-400 shrink-0">
+                                <i class="fa-regular fa-eye"></i>
+                            </div>
+                            <div class="min-w-0">
+                                <h3 id="previewTitle" class="text-base font-bold text-white truncate">
+                                    Instant File Previewer
+                                </h3>
+                                <p id="previewSubtitle" class="text-xs text-slate-400 font-mono truncate">
+                                    No file selected yet
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- External Launch / Download Controls -->
+                        <div id="previewActions" class="hidden flex-wrap items-center gap-2 shrink-0">
+                            <button onclick="openFileInNewTab()" class="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition flex items-center gap-1.5 shadow">
+                                <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                                <span>Open in New Tab</span>
+                            </button>
+                            <button onclick="downloadOrLaunchFile()" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition flex items-center gap-1.5">
+                                <i class="fa-solid fa-download"></i>
+                                <span>Download / Launch</span>
+                            </button>
+                            <button onclick="copyFilePath()" class="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs border border-slate-700 transition" title="Copy Relative Path">
+                                <i class="fa-regular fa-copy"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Dynamic Preview Viewport -->
+                    <div id="previewViewport" class="mt-4 min-h-[260px] max-h-[520px] overflow-auto rounded-xl bg-slate-950/90 border border-slate-800/90 flex flex-col items-center justify-center p-4">
+                        <div class="text-center text-slate-500 py-12">
+                            <i class="fa-solid fa-photo-film text-4xl mb-3 opacity-40"></i>
+                            <p class="text-sm font-medium">Spin the roulette to preview your chosen file right here</p>
+                            <p class="text-xs text-slate-600 mt-1">Supports Images, Video, Audio, Source Code, Markdown, JSON, Text &amp; PDFs</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 5. Session History Log -->
+                <section class="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-xl">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-sm font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                            <i class="fa-solid fa-clock-rotate-left text-indigo-400"></i>Picked History (<span id="historyCount">0</span>)
+                        </h3>
+                        <button onclick="clearHistory()" class="text-xs text-slate-400 hover:text-rose-400 transition flex items-center gap-1">
+                            <i class="fa-solid fa-trash-can"></i> Reset History
+                        </button>
+                    </div>
+
+                    <div id="historyList" class="space-y-2 max-h-56 overflow-y-auto pr-1">
+                        <p class="text-xs text-slate-500 italic py-3 text-center">No files picked in this session yet.</p>
+                    </div>
+                </section>
+
+            </div>
+        </div>
+    </main>
+
+    <!-- ========================================== -->
+    <!-- TAB 1.5: MULTIPLAYER 2/3 TRIBUNAL VOTE     -->
+    <!-- ========================================== -->
+    <main id="viewMultiplayer" class="hidden flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        
+        <!-- Top Connection & Room Bar -->
+        <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-xl mb-6">
+            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                
+                <!-- Player Profile & Auth ID -->
+                <div class="flex flex-wrap items-center gap-3">
+                    <div class="w-11 h-11 rounded-2xl bg-gradient-to-br from-rose-500 to-indigo-600 flex items-center justify-center text-white text-lg font-extrabold shadow-lg shadow-rose-500/20">
+                        <i class="fa-solid fa-gavel"></i>
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h2 class="text-base font-extrabold text-white">Tribunal Party Lobby</h2>
+                            <span id="mpConnectionStatus" class="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700">
+                                Connecting...
+                            </span>
+                        </div>
+                        <p class="text-xs text-slate-400 mt-0.5">
+                            Your Player ID: <code id="mpUserIdDisplay" class="text-indigo-300 font-mono select-all">authenticating...</code>
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Nickname & Room Controls -->
+                <div class="flex flex-wrap items-center gap-2.5">
+                    <div class="flex items-center bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5">
+                        <i class="fa-regular fa-user text-slate-500 text-xs mr-2"></i>
+                        <input id="mpNicknameInput" type="text" placeholder="Your Nickname" maxlength="18"
+                               onchange="mpUpdateProfile()"
+                               class="bg-transparent text-xs font-semibold text-white outline-none w-28 sm:w-32">
+                    </div>
+
+                    <div class="flex items-center bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5">
+                        <i class="fa-solid fa-key text-amber-400 text-xs mr-2"></i>
+                        <input id="mpRoomCodeInput" type="text" placeholder="ROOM CODE" maxlength="6"
+                               class="bg-transparent text-xs font-mono font-bold uppercase text-amber-300 outline-none w-24">
+                    </div>
+
+                    <button onclick="mpCreateOrJoinRoom()" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition shadow flex items-center gap-1.5">
+                        <i class="fa-solid fa-door-open"></i>
+                        <span>Join / Create Room</span>
+                    </button>
+
+                    <button onclick="mpStartBotSimulation()" class="px-4 py-2 rounded-xl bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 text-xs font-bold transition flex items-center gap-1.5" title="Test the 2/3 supermajority voting immediately with interactive AI bots">
+                        <i class="fa-solid fa-robot"></i>
+                        <span>+ Add AI Bots (Test 2/3 Vote)</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Active Room Banner & Rules Bar -->
+            <div id="mpActiveRoomBar" class="mt-4 pt-4 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-3">
+                <div class="flex flex-wrap items-center gap-3">
+                    <div class="px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center gap-2">
+                        <span class="text-xs text-slate-400">Room Code:</span>
+                        <span id="mpCurrentRoomBadge" class="font-mono font-extrabold text-sm text-amber-400 tracking-wider">LOBBY1</span>
+                        <button onclick="mpCopyRoomCode()" class="text-slate-400 hover:text-white text-xs ml-1" title="Copy Room Code">
+                            <i class="fa-regular fa-copy"></i>
+                        </button>
+                    </div>
+
+                    <div class="px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center gap-2 text-xs">
+                        <span class="text-slate-400">2/3 Threshold:</span>
+                        <span id="mpThresholdDisplay" class="font-bold text-rose-400">2 of 3 votes needed</span>
+                    </div>
+
+                    <div class="px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center gap-2 text-xs">
+                        <span class="text-slate-400">Your Local Pool:</span>
+                        <span id="mpLocalPoolBadge" class="font-bold text-emerald-400">0 files ready</span>
+                        <button onclick="triggerFolderSelection()" class="text-[11px] px-2 py-0.5 rounded bg-indigo-600/30 text-indigo-300 hover:bg-indigo-600/50 transition">
+                            Change Folder
+                        </button>
+                        <button onclick="loadDemoFiles()" class="text-[11px] px-2 py-0.5 rounded bg-purple-600/30 text-purple-300 hover:bg-purple-600/50 transition">
+                            Use Demo Pool
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Safety Veto Guardrail Toggle -->
+                <div class="flex items-center gap-3">
+                    <label class="flex items-center gap-2 cursor-pointer text-xs bg-slate-950 border border-slate-800 px-3 py-1.5 rounded-xl">
+                        <input type="checkbox" id="mpSafetyVetoToggle" checked class="accent-emerald-500 rounded cursor-pointer">
+                        <span class="text-slate-300 font-medium">3-Sec Safety Veto before Reveal</span>
+                    </label>
+                    <button onclick="mpResetAllVotes()" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-300 border border-slate-700 transition">
+                        <i class="fa-solid fa-rotate-left mr-1"></i> Reset Votes
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tribunal Alert Banner (Hidden until 2/3 Verdict is triggered) -->
+        <div id="mpVerdictAlertBanner" class="hidden mb-6 rounded-2xl p-5 bg-gradient-to-r from-rose-950 via-red-900/90 to-amber-950 border-2 border-rose-500 shadow-2xl shadow-rose-600/30 animate-pulse">
+            <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div class="flex items-center gap-4">
+                    <div class="w-12 h-12 rounded-2xl bg-rose-500 flex items-center justify-center text-white text-2xl shadow-lg">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                    </div>
+                    <div>
+                        <div class="text-xs font-extrabold uppercase tracking-widest text-rose-300">
+                            2/3 Supermajority Verdict Reached!
+                        </div>
+                        <h3 id="mpVerdictHeadline" class="text-lg sm:text-xl font-extrabold text-white">
+                            Tribunal has voted! Spinning target's PC Roulette...
+                        </h3>
+                    </div>
+                </div>
+
+                <!-- Veto Button shown only to the targeted player during the 3-second countdown -->
+                <div id="mpVetoControlBox" class="hidden items-center gap-3">
+                    <span id="mpVetoCountdownText" class="text-xs font-mono font-bold text-amber-300">Revealing in 3s...</span>
+                    <button onclick="mpVetoAndRespin()" class="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs shadow-lg transition">
+                        <i class="fa-solid fa-shield-halved mr-1"></i> Veto &amp; Re-Roll File
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Multiplayer Grid: Left Players Voting Arena (7 cols) | Right Live Feed & Synced Reveal Stage (5 cols) -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            
+            <!-- LEFT: Players & 2/3 Tribunal Voting Cards (7 cols) -->
+            <div class="lg:col-span-7 space-y-4">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-sm font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                        <i class="fa-solid fa-users-viewfinder text-rose-400"></i>
+                        <span>Players in Room (<span id="mpPlayerCount">1</span>) — Click to Vote Target</span>
+                    </h3>
+                    <button onclick="mpSimulateBotVotesOnMe()" class="text-xs text-rose-400 hover:text-rose-300 font-semibold transition flex items-center gap-1">
+                        <i class="fa-solid fa-bolt"></i> Simulate 2/3 Vote on Me
+                    </button>
+                </div>
+
+                <!-- Dynamic Player Cards Grid -->
+                <div id="mpPlayersGrid" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <!-- Populated via JS -->
+                </div>
+            </div>
+
+            <!-- RIGHT: Live Room Roulette Stage & Broadcast Feed (5 cols) -->
+            <div class="lg:col-span-5 space-y-6">
+                
+                <!-- Synchronized Roulette Reveal Stage -->
+                <section class="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-xl">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-sm font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                            <i class="fa-solid fa-satellite-dish text-indigo-400"></i>
+                            <span>Live Tribunal Reveal Stage</span>
+                        </h3>
+                        <span id="mpRevealOwnerBadge" class="text-[11px] font-mono px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700">
+                            Waiting for 2/3 Vote
+                        </span>
+                    </div>
+
+                    <div id="mpLiveRevealViewport" class="min-h-[240px] max-h-[420px] overflow-auto rounded-xl bg-slate-950/90 border border-slate-800 p-4 flex flex-col items-center justify-center text-center">
+                        <div class="text-slate-500 py-8">
+                            <i class="fa-solid fa-scale-balanced text-4xl mb-3 opacity-40 text-rose-400"></i>
+                            <p class="text-sm font-semibold text-slate-300">No Tribunal Verdict Yet</p>
+                            <p class="text-xs text-slate-500 mt-1 max-w-xs">
+                                When 2/3 of the room votes on a player, their PC automatically spins and broadcasts one random file here!
+                            </p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Room Activity & Reveal History Feed -->
+                <section class="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-xl">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-sm font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                            <i class="fa-solid fa-bolt-lightning text-amber-400"></i>
+                            <span>Room Verdict Feed</span>
+                        </h3>
+                    </div>
+                    <div id="mpActivityFeed" class="space-y-2.5 max-h-60 overflow-y-auto pr-1">
+                        <p class="text-xs text-slate-500 italic text-center py-4">Vote on a player to trigger a random file opening.</p>
+                    </div>
+                </section>
+
+            </div>
+        </div>
+    </main>
+
+    <!-- ========================================== -->
+    <!-- TAB 2: NATIVE DESKTOP SCRIPT GENERATOR     -->
+    <!-- ========================================== -->
+    <main id="viewNativeScript" class="hidden flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div class="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-8">
+            
+            <!-- Header info -->
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-6">
+                <div>
+                    <span class="text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                        Zero-Browser Native OS Opener
+                    </span>
+                    <h2 class="text-2xl font-extrabold text-white mt-2">
+                        Native Desktop Script Generator
+                    </h2>
+                    <p class="text-sm text-slate-400 mt-1 max-w-2xl">
+                        Want a one-click desktop shortcut that immediately opens a random file in your default OS application (VLC, Photoshop, VS Code, Preview, etc.) without opening a browser? Customize and download your standalone script below.
+                    </p>
+                </div>
+                <div class="flex items-center gap-3 shrink-0">
+                    <button onclick="downloadPythonScript()" class="px-5 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-extrabold text-sm shadow-lg shadow-amber-500/20 transition flex items-center gap-2">
+                        <i class="fa-solid fa-download"></i>
+                        <span>Download random_file_opener.py</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Script Customizer Form -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-950/70 p-5 rounded-2xl border border-slate-800">
+                <div>
+                    <label class="text-xs font-semibold text-slate-300 block mb-1.5">
+                        Target Folder Path on Your PC
+                    </label>
+                    <input type="text" id="scriptPathInput" oninput="updateGeneratedScripts()" value="C:/Users/YourName/Downloads" 
+                           class="w-full bg-slate-900 border border-slate-700 focus:border-indigo-500 rounded-xl px-3.5 py-2 text-xs text-white font-mono outline-none">
+                    <p class="text-[11px] text-slate-500 mt-1">Leave as <code class="text-slate-400">.</code> to scan the folder where the script is placed.</p>
+                </div>
+
+                <div>
+                    <label class="text-xs font-semibold text-slate-300 block mb-1.5">
+                        Allowed Extensions (comma-separated, or * for all)
+                    </label>
+                    <input type="text" id="scriptExtInput" oninput="updateGeneratedScripts()" value="*" 
+                           class="w-full bg-slate-900 border border-slate-700 focus:border-indigo-500 rounded-xl px-3.5 py-2 text-xs text-white font-mono outline-none">
+                    <p class="text-[11px] text-slate-500 mt-1">Example: <code class="text-slate-400">.mp4, .mkv, .jpg, .pdf</code></p>
+                </div>
+
+                <div>
+                    <label class="text-xs font-semibold text-slate-300 block mb-1.5">
+                        Include Subfolders &amp; GUI Prompt
+                    </label>
+                    <div class="flex flex-col gap-2 mt-2">
+                        <label class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                            <input type="checkbox" id="scriptRecursiveToggle" checked onchange="updateGeneratedScripts()" class="accent-indigo-500 rounded">
+                            <span>Scan all subfolders recursively</span>
+                        </label>
+                        <label class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                            <input type="checkbox" id="scriptGuiToggle" checked onchange="updateGeneratedScripts()" class="accent-indigo-500 rounded">
+                            <span>Include Tkinter GUI window with "Spin Again" button</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Python Script Output -->
+            <div class="space-y-3">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <i class="fa-brands fa-python text-amber-400 text-lg"></i>
+                        <h3 class="text-sm font-bold text-white">Cross-Platform Python Script (<code class="text-amber-300 font-mono">random_file_opener.py</code>)</h3>
+                    </div>
+                    <button onclick="copyCodeBlock('pythonCodeBlock')" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 border border-slate-700 transition flex items-center gap-1.5">
+                        <i class="fa-regular fa-copy"></i> Copy Python Code
+                    </button>
+                </div>
+                <pre id="pythonCodeBlock" class="bg-slate-950 border border-slate-800 rounded-2xl p-4 text-xs font-mono text-emerald-300 overflow-x-auto leading-relaxed max-h-96"></pre>
+            </div>
+
+            <!-- Terminal One-Liners (Windows PowerShell & macOS/Linux) -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-slate-800">
+                <!-- Windows PowerShell One-Liner -->
+                <div class="space-y-2">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold text-sky-400 flex items-center gap-1.5">
+                            <i class="fa-brands fa-windows"></i> Windows PowerShell One-Liner
+                        </span>
+                        <button onclick="copyCodeBlock('powershellCodeBlock')" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-[11px] font-semibold text-slate-300 border border-slate-700 transition">
+                            <i class="fa-regular fa-copy"></i> Copy
+                        </button>
+                    </div>
+                    <pre id="powershellCodeBlock" class="bg-slate-950 border border-slate-800 rounded-xl p-3.5 text-xs font-mono text-sky-300 overflow-x-auto whitespace-pre-wrap"></pre>
+                </div>
+
+                <!-- macOS / Linux Terminal One-Liner -->
+                <div class="space-y-2">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold text-purple-400 flex items-center gap-1.5">
+                            <i class="fa-brands fa-apple"></i> macOS / Linux Terminal One-Liner
+                        </span>
+                        <button onclick="copyCodeBlock('bashCodeBlock')" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-[11px] font-semibold text-slate-300 border border-slate-700 transition">
+                            <i class="fa-regular fa-copy"></i> Copy
+                        </button>
+                    </div>
+                    <pre id="bashCodeBlock" class="bg-slate-950 border border-slate-800 rounded-xl p-3.5 text-xs font-mono text-purple-300 overflow-x-auto whitespace-pre-wrap"></pre>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="border-t border-slate-800/80 py-4 text-center text-xs text-slate-500 mt-auto">
+        <div class="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
+            <span><i class="fa-solid fa-shield-halved text-emerald-400 mr-1"></i> 100% Local Processing — Files never leave your computer.</span>
+            <span>Keyboard Shortcut: Press <kbd class="px-1.5 py-0.5 bg-slate-800 text-slate-300 rounded border border-slate-700 font-mono">Space</kbd> to Spin Roulette</span>
+        </div>
+    </footer>
+
+    <!-- ========================================== -->
+    <!-- APPLICATION JAVASCRIPT                     -->
+    <!-- ========================================== -->
+    <script>
+        // --- State Management ---
+        let allScannedFiles = [];     // Array of normalized file items: { name, path, size, type, ext, category, fileObj, isDemo, demoContent }
+        let eligibleFiles = [];       // Filtered subset ready for roulette
+        let sessionHistory = [];      // Picked files in current session
+        let pickedPathsSet = new Set(); // Used when "No Repeats" is enabled
+        let currentCategoryFilter = 'all';
+        let currentSelectedFile = null;
+        let currentObjectUrl = null;
+        let isSpinning = false;
+        let soundEnabled = true;
+        let audioCtx = null;
+
+        // --- File Extension Dictionary ---
+        const EXT_CATEGORIES = {
+            image: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico', 'avif'],
+            video: ['mp4', 'webm', 'mkv', 'mov', 'avi', 'm4v', 'ogv'],
+            audio: ['mp3', 'wav', 'ogg', 'flac', 'm4a', 'aac', 'opus'],
+            code:  ['txt', 'md', 'json', 'js', 'jsx', 'ts', 'tsx', 'py', 'html', 'css', 'scss', 'c', 'cpp', 'h', 'java', 'rs', 'go', 'php', 'rb', 'sh', 'bat', 'ps1', 'yml', 'yaml', 'xml', 'csv', 'sql', 'ini', 'log', 'toml'],
+            docs:  ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'odt', 'rtf', 'epub']
+        };
+
+        const IGNORED_DIRS = ['node_modules', '.git', '.svn', '.hg', '__pycache__', '.next', 'dist', 'build', '.venv', 'venv', '.idea', '.vscode'];
+
+        // --- Web Audio API Synthesizer for Slot Machine Clicks & Win Chime ---
+        function initAudio() {
+            if (!audioCtx) {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                if (AudioContext) audioCtx = new AudioContext();
+            }
+            if (audioCtx && audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        function playTickSound(freq = 520) {
+            if (!soundEnabled) return;
+            try {
+                initAudio();
+                if (!audioCtx) return;
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+                gain.gain.setValueAtTime(0.06, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.045);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.05);
+            } catch (e) {}
+        }
+
+        function playWinnerSound() {
+            if (!soundEnabled) return;
+            try {
+                initAudio();
+                if (!audioCtx) return;
+                const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+                notes.forEach((freq, idx) => {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'sine';
+                    const startTime = audioCtx.currentTime + idx * 0.08;
+                    osc.frequency.setValueAtTime(freq, startTime);
+                    gain.gain.setValueAtTime(0.11, startTime);
+                    gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.35);
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.start(startTime);
+                    osc.stop(startTime + 0.36);
+                });
+            } catch (e) {}
+        }
+
+        function toggleSound() {
+            soundEnabled = !soundEnabled;
+            const icon = document.getElementById('soundIcon');
+            if (soundEnabled) {
+                icon.className = 'fa-solid fa-volume-high text-indigo-400';
+                showToast('Sound effects enabled', 'info');
+            } else {
+                icon.className = 'fa-solid fa-volume-xmark text-slate-500';
+                showToast('Sound effects muted', 'info');
+            }
+        }
+
+        // --- Tab Navigation ---
+        function switchMainTab(tab) {
+            const viewWeb = document.getElementById('viewWebApp');
+            const viewMulti = document.getElementById('viewMultiplayer');
+            const viewNative = document.getElementById('viewNativeScript');
+            const btnWeb = document.getElementById('tabWebApp');
+            const btnMulti = document.getElementById('tabMultiplayer');
+            const btnNative = document.getElementById('tabNativeScript');
+
+            const activeClass = 'px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all flex items-center gap-2 bg-indigo-600 text-white shadow';
+            const inactiveClass = 'px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all flex items-center gap-2 text-slate-400 hover:text-white hover:bg-slate-800/60';
+
+            viewWeb.classList.add('hidden');
+            viewMulti.classList.add('hidden');
+            viewNative.classList.add('hidden');
+
+            btnWeb.className = inactiveClass;
+            btnMulti.className = inactiveClass;
+            btnNative.className = inactiveClass;
+
+            if (tab === 'webapp') {
+                viewWeb.classList.remove('hidden');
+                btnWeb.className = activeClass;
+            } else if (tab === 'multiplayer') {
+                viewMulti.classList.remove('hidden');
+                btnMulti.className = activeClass;
+                if (typeof window.onMultiplayerTabOpened === 'function') {
+                    window.onMultiplayerTabOpened();
+                }
+            } else {
+                viewNative.classList.remove('hidden');
+                btnNative.className = activeClass;
+                updateGeneratedScripts();
+            }
+        }
+
+        // --- Helper: Categorize File by Extension ---
+        function getFileExtension(filename) {
+            const parts = filename.split('.');
+            if (parts.length <= 1) return '';
+            return parts.pop().toLowerCase();
+        }
+
+        function categorizeExtension(ext) {
+            for (const [category, list] of Object.entries(EXT_CATEGORIES)) {
+                if (list.includes(ext)) return category;
+            }
+            return 'other';
+        }
+
+        function getCategoryIconHTML(category) {
+            switch (category) {
+                case 'image': return '<i class="fa-regular fa-image text-pink-400"></i>';
+                case 'video': return '<i class="fa-solid fa-film text-purple-400"></i>';
+                case 'audio': return '<i class="fa-solid fa-music text-amber-400"></i>';
+                case 'code':  return '<i class="fa-solid fa-code text-emerald-400"></i>';
+                case 'docs':  return '<i class="fa-regular fa-file-pdf text-rose-400"></i>';
+                default:      return '<i class="fa-regular fa-file text-sky-400"></i>';
+            }
+        }
+
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        }
+
+        // --- Folder Selection Methods ---
+        function triggerFolderSelection() {
+            // Default to standard input webkitdirectory because it works reliably across all browsers and sandboxed iframes
+            document.getElementById('fallbackDirInput').click();
+        }
+
+        async function useModernDirectoryPicker() {
+            if (!('showDirectoryPicker' in window)) {
+                showToast('Modern Directory Picker not supported in this browser; opening standard folder selector...', 'info');
+                triggerFolderSelection();
+                return;
+            }
+            try {
+                const dirHandle = await window.showDirectoryPicker();
+                showToast(`Scanning "${dirHandle.name}"...`, 'info');
+                const collected = [];
+                await scanDirectoryHandleRecursively(dirHandle, dirHandle.name, collected);
+                processNormalizedFiles(collected, dirHandle.name);
+            } catch (err) {
+                if (err.name !== 'AbortError') {
+                    // Fallback if security frame blocks showDirectoryPicker
+                    triggerFolderSelection();
+                }
+            }
+        }
+
+        async function scanDirectoryHandleRecursively(dirHandle, currentPath, results) {
+            for await (const entry of dirHandle.values()) {
+                const entryPath = `${currentPath}/${entry.name}`;
+                if (entry.kind === 'file') {
+                    try {
+                        const fileData = await entry.getFile();
+                        const ext = getFileExtension(fileData.name);
+                        results.push({
+                            name: fileData.name,
+                            path: entryPath,
+                            size: fileData.size,
+                            ext: ext,
+                            category: categorizeExtension(ext),
+                            fileObj: fileData,
+                            isDemo: false
+                        });
+                    } catch (e) {}
+                } else if (entry.kind === 'directory') {
+                    // Avoid deep recursion into node_modules/.git during handle traversal if toggle is checked
+                    const skipDev = document.getElementById('excludeDevDirsToggle').checked;
+                    if (skipDev && IGNORED_DIRS.includes(entry.name)) continue;
+                    await scanDirectoryHandleRecursively(entry, entryPath, results);
+                }
+            }
+        }
+
+        function handleFallbackFiles(fileList) {
+            if (!fileList || fileList.length === 0) return;
+            const collected = [];
+            let rootFolderName = 'Selected Folder';
+
+            for (let i = 0; i < fileList.length; i++) {
+                const f = fileList[i];
+                const relPath = f.webkitRelativePath || f.name;
+                if (i === 0 && relPath.includes('/')) {
+                    rootFolderName = relPath.split('/')[0];
+                }
+                const ext = getFileExtension(f.name);
+                collected.push({
+                    name: f.name,
+                    path: relPath,
+                    size: f.size,
+                    ext: ext,
+                    category: categorizeExtension(ext),
+                    fileObj: f,
+                    isDemo: false
+                });
+            }
+
+            processNormalizedFiles(collected, rootFolderName);
+        }
+
+        function processNormalizedFiles(fileArray, folderLabel) {
+            allScannedFiles = fileArray;
+            pickedPathsSet.clear();
+
+            // Update Folder Badge
+            const badge = document.getElementById('folderStatusBadge');
+            badge.textContent = `${folderLabel} (${fileArray.length})`;
+            badge.className = 'text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30';
+
+            updateBreakdownCounts();
+            applyFilters();
+            if (typeof window.mpSyncPoolCount === 'function') {
+                window.mpSyncPoolCount(eligibleFiles.length);
+            }
+            showToast(`Loaded ${fileArray.length} files from "${folderLabel}"!`, 'success');
+        }
+
+        // --- Demo Mode (Virtual PC Folder for Immediate Testing) ---
+        function loadDemoFiles() {
+            const demoItems = [
+                {
+                    name: 'Synthwave_Sunset_Wallpaper.svg',
+                    path: 'Demo_PC_Folder/Pictures/Wallpapers/Synthwave_Sunset_Wallpaper.svg',
+                    size: 18420,
+                    ext: 'svg',
+                    category: 'image',
+                    isDemo: true,
+                    demoType: 'svg',
+                    demoContent: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="100%" height="100%">
+                        <defs>
+                            <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stop-color="#0f0728"/>
+                                <stop offset="55%" stop-color="#4c1d95"/>
+                                <stop offset="100%" stop-color="#ec4899"/>
+                            </linearGradient>
+                            <linearGradient id="sun" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stop-color="#fde047"/>
+                                <stop offset="100%" stop-color="#f43f5e"/>
+                            </linearGradient>
+                        </defs>
+                        <rect width="800" height="450" fill="url(#sky)"/>
+                        <circle cx="400" cy="240" r="110" fill="url(#sun)"/>
+                        <rect y="290" width="800" height="160" fill="#090418"/>
+                        <g stroke="#ec4899" stroke-width="1.5" opacity="0.55">
+                            <line x1="0" y1="310" x2="800" y2="310"/>
+                            <line x1="0" y1="340" x2="800" y2="340"/>
+                            <line x1="0" y1="380" x2="800" y2="380"/>
+                            <line x1="0" y1="430" x2="800" y2="430"/>
+                            <line x1="400" y1="290" x2="0" y2="450"/>
+                            <line x1="400" y1="290" x2="200" y2="450"/>
+                            <line x1="400" y1="290" x2="400" y2="450"/>
+                            <line x1="400" y1="290" x2="600" y2="450"/>
+                            <line x1="400" y1="290" x2="800" y2="450"/>
+                        </g>
+                        <text x="400" y="90" fill="#fff" font-family="monospace" font-size="26" font-weight="bold" text-anchor="middle">RANDOM FILE ROULETTE // RETRO SUNSET</text>
+                    </svg>`
+                },
+                {
+                    name: 'weekend_project_ideas.md',
+                    path: 'Demo_PC_Folder/Documents/Notes/weekend_project_ideas.md',
+                    size: 2450,
+                    ext: 'md',
+                    category: 'code',
+                    isDemo: true,
+                    demoContent: `# Weekend Coding & Creative Ideas\n\n1. **Random File Roulette** — Build an app that picks a forgotten file from my Downloads or Reference folder.\n2. **Lo-Fi Beat Generator** — WebAudio synthesizer with rain ambiance.\n3. **Local Markdown Wiki** — Fast personal knowledge base.\n\n> "The best way to rediscover old inspiration is by opening a random file you forgot you saved."`
+                },
+                {
+                    name: 'retro_arcade_loop.wav',
+                    path: 'Demo_PC_Folder/Music/Samples/retro_arcade_loop.wav',
+                    size: 412000,
+                    ext: 'wav',
+                    category: 'audio',
+                    isDemo: true,
+                    demoType: 'synth-audio'
+                },
+                {
+                    name: 'secret_recipe_ramen.txt',
+                    path: 'Demo_PC_Folder/Documents/Recipes/secret_recipe_ramen.txt',
+                    size: 1320,
+                    ext: 'txt',
+                    category: 'code',
+                    isDemo: true,
+                    demoContent: `=== MIDNIGHT GARLIC MISO RAMEN ===\n\nIngredients:\n- 2 tbsp Red Miso Paste\n- 1 tbsp Sesame Oil\n- 4 cloves grated garlic & fresh ginger\n- 500ml Chicken or Mushroom Broth\n- Soft-boiled egg (6 min 30 sec)\n- Crispy chili oil & green onions\n\nInstructions:\nSauté garlic and ginger in sesame oil for 60s. Whisk in miso paste and broth. Simmer 5 mins, pour over noodles, top with jammy egg!`
+                },
+                {
+                    name: 'fibonacci_visualizer.py',
+                    path: 'Demo_PC_Folder/Projects/Python/fibonacci_visualizer.py',
+                    size: 1890,
+                    ext: 'py',
+                    category: 'code',
+                    isDemo: true,
+                    demoContent: `import math\n\ndef golden_spiral_points(n=20):\n    """Generate coordinates along a Fibonacci Golden Spiral."""\n    phi = (1 + math.sqrt(5)) / 2\n    points = []\n    for i in range(n):\n        theta = i * 2 * math.pi / (phi ** 2)\n        r = math.sqrt(i) * 10\n        x = round(r * math.cos(theta), 2)\n        y = round(r * math.sin(theta), 2)\n        points.append((x, y))\n    return points\n\nif __name__ == "__main__":\n    for idx, pt in enumerate(golden_spiral_points(12)):\n        print(f"Point {idx:02d}: {pt}")`
+                },
+                {
+                    name: 'Cyberpunk_City_Blueprint.svg',
+                    path: 'Demo_PC_Folder/Pictures/ConceptArt/Cyberpunk_City_Blueprint.svg',
+                    size: 29400,
+                    ext: 'svg',
+                    category: 'image',
+                    isDemo: true,
+                    demoType: 'svg',
+                    demoContent: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="100%" height="100%">
+                        <rect width="800" height="450" fill="#041326"/>
+                        <g stroke="#0ea5e9" stroke-width="1" opacity="0.2">
+                            <path d="M 0 50 H 800 M 0 100 H 800 M 0 150 H 800 M 0 200 H 800 M 0 250 H 800 M 0 300 H 800 M 0 350 H 800 M 0 400 H 800"/>
+                            <path d="M 100 0 V 450 M 200 0 V 450 M 300 0 V 450 M 400 0 V 450 M 500 0 V 450 M 600 0 V 450 M 700 0 V 450"/>
+                        </g>
+                        <g fill="none" stroke="#38bdf8" stroke-width="2.5">
+                            <rect x="120" y="130" width="90" height="270"/>
+                            <rect x="240" y="80" width="130" height="320"/>
+                            <rect x="400" y="160" width="110" height="240"/>
+                            <rect x="540" y="100" width="140" height="300"/>
+                            <polygon points="240,80 305,30 370,80"/>
+                            <circle cx="610" cy="170" r="35" stroke="#f43f5e"/>
+                        </g>
+                        <text x="40" y="45" fill="#38bdf8" font-family="monospace" font-size="18">CAD // SECTOR-7 SKYLINE BLUEPRINT</text>
+                    </svg>`
+                },
+                {
+                    name: 'keyboard_shortcuts_cheatsheet.json',
+                    path: 'Demo_PC_Folder/Config/keyboard_shortcuts_cheatsheet.json',
+                    size: 940,
+                    ext: 'json',
+                    category: 'code',
+                    isDemo: true,
+                    demoContent: `{\n  "app": "Random File Roulette",\n  "version": "2.0.0",\n  "shortcuts": {\n    "Space": "Spin the Roulette Wheel",\n    "Instant_Pick": "Pick without slot animation",\n    "No_Repeats": "Prevents picking the same file twice"\n  },\n  "privacy": "100% Local Browser Sandbox"\n}`
+                }
+            ];
+
+            processNormalizedFiles(demoItems, 'Demo_PC_Folder');
+        }
+
+        // --- Stats & Filtering Logic ---
+        function updateBreakdownCounts() {
+            const counts = { image: 0, video: 0, audio: 0, code: 0, docs: 0, other: 0 };
+            allScannedFiles.forEach(f => {
+                if (counts[f.category] !== undefined) counts[f.category]++;
+                else counts.other++;
+            });
+
+            document.getElementById('statTotalScanned').textContent = allScannedFiles.length;
+            document.getElementById('countImages').textContent = counts.image;
+            document.getElementById('countVideos').textContent = counts.video;
+            document.getElementById('countAudio').textContent = counts.audio;
+            document.getElementById('countCode').textContent = counts.code;
+            document.getElementById('countDocs').textContent = counts.docs;
+            document.getElementById('countOthers').textContent = counts.other;
+        }
+
+        function setCategoryFilter(cat) {
+            currentCategoryFilter = cat;
+            document.querySelectorAll('.cat-btn').forEach(btn => {
+                if (btn.getAttribute('data-cat') === cat) {
+                    btn.className = 'cat-btn active-cat px-2.5 py-2 rounded-xl text-xs font-semibold border transition flex items-center justify-center gap-1.5 bg-indigo-600 text-white border-indigo-500 shadow';
+                } else {
+                    btn.className = 'cat-btn px-2.5 py-2 rounded-xl text-xs font-semibold border transition flex items-center justify-center gap-1.5 bg-slate-950 text-slate-300 border-slate-800 hover:border-slate-700';
+                }
+            });
+            applyFilters();
+        }
+
+        function clearCustomExt() {
+            document.getElementById('customExtInput').value = '';
+            applyFilters();
+        }
+
+        function applyFilters() {
+            const customExtRaw = document.getElementById('customExtInput').value.trim();
+            const clearBtn = document.getElementById('clearExtBtn');
+            clearBtn.classList.toggle('hidden', customExtRaw.length === 0);
+
+            const customExts = customExtRaw
+                ? customExtRaw.split(',').map(s => s.trim().replace(/^\./, '').toLowerCase()).filter(Boolean)
+                : [];
+
+            const excludeHidden = document.getElementById('excludeHiddenToggle').checked;
+            const excludeDevDirs = document.getElementById('excludeDevDirsToggle').checked;
+            const noRepeats = document.getElementById('noRepeatsToggle').checked;
+
+            eligibleFiles = allScannedFiles.filter(file => {
+                // 1. Hidden files check
+                if (excludeHidden) {
+                    const parts = file.path.split('/');
+                    if (parts.some(p => p.startsWith('.') && p.length > 1)) return false;
+                    if (file.name === 'Thumbs.db' || file.name === 'desktop.ini') return false;
+                }
+
+                // 2. Ignored dev directories check
+                if (excludeDevDirs) {
+                    const pathSegments = file.path.split('/');
+                    if (pathSegments.some(seg => IGNORED_DIRS.includes(seg))) return false;
+                }
+
+                // 3. Category filter
+                if (currentCategoryFilter !== 'all' && file.category !== currentCategoryFilter) {
+                    return false;
+                }
+
+                // 4. Custom extension filter
+                if (customExts.length > 0 && !customExts.includes(file.ext)) {
+                    return false;
+                }
+
+                // 5. No repeats filter
+                if (noRepeats && pickedPathsSet.has(file.path)) {
+                    return false;
+                }
+
+                return true;
+            });
+
+            document.getElementById('eligiblePoolCount').textContent = eligibleFiles.length;
+            const statusEl = document.getElementById('poolReadyStatus');
+            if (allScannedFiles.length === 0) {
+                statusEl.textContent = 'Select a folder or click "Try Demo Folder" to spin';
+            } else if (eligibleFiles.length === 0) {
+                statusEl.textContent = '0 files match current filters (try resetting filters or history)';
+            } else {
+                statusEl.textContent = `${eligibleFiles.length} files ready in roulette pool`;
+            }
+            if (typeof window.mpSyncPoolCount === 'function') {
+                window.mpSyncPoolCount(eligibleFiles.length);
+            }
+        }
+
+        // --- Roulette Spin Animation & Winner Selection ---
+        function spinRoulette(instant = false) {
+            if (isSpinning) return;
+
+            if (allScannedFiles.length === 0) {
+                showToast('Loading Demo Folder so you can test the Roulette right away!', 'info');
+                loadDemoFiles();
+            }
+
+            if (eligibleFiles.length === 0) {
+                showToast('No eligible files left in pool! Resetting session history or check your filters.', 'warning');
+                return;
+            }
+
+            const winnerIndex = Math.floor(Math.random() * eligibleFiles.length);
+            const winnerFile = eligibleFiles[winnerIndex];
+
+            if (instant || eligibleFiles.length === 1) {
+                finalizeWinner(winnerFile);
+                return;
+            }
+
+            isSpinning = true;
+            const displayBox = document.getElementById('rouletteDisplayBox');
+            const prevSlot = document.getElementById('roulettePrevSlot');
+            const nextSlot = document.getElementById('rouletteNextSlot');
+            const slotName = document.getElementById('slotFileName');
+            const slotPath = document.getElementById('slotFilePath');
+            const slotIcon = document.getElementById('slotCategoryIcon');
+            const spinBtnText = document.getElementById('spinBtnText');
+
+            displayBox.classList.remove('winner-glow');
+            displayBox.classList.add('roulette-active-glow');
+            spinBtnText.textContent = 'SHUFFLING FILES...';
+
+            const totalSteps = 26;
+            let currentStep = 0;
+
+            function nextStep() {
+                currentStep++;
+                const randIdx = Math.floor(Math.random() * eligibleFiles.length);
+                const prevIdx = (randIdx - 1 + eligibleFiles.length) % eligibleFiles.length;
+                const nextIdx = (randIdx + 1) % eligibleFiles.length;
+
+                const sample = eligibleFiles[randIdx];
+                prevSlot.textContent = eligibleFiles[prevIdx].name;
+                nextSlot.textContent = eligibleFiles[nextIdx].name;
+
+                slotName.textContent = sample.name;
+                slotPath.textContent = sample.path;
+                slotIcon.innerHTML = getCategoryIconHTML(sample.category);
+                slotIcon.style.transform = `scale(${currentStep % 2 === 0 ? 1.12 : 0.95})`;
+
+                // Pitch rises slightly as wheel slows down
+                playTickSound(380 + currentStep * 14);
+
+                if (currentStep < totalSteps) {
+                    // Quadratic easing for realistic roulette deceleration
+                    const progress = currentStep / totalSteps;
+                    const delay = 30 + Math.pow(progress, 2.7) * 260;
+                    setTimeout(nextStep, delay);
+                } else {
+                    finalizeWinner(winnerFile);
+                }
+            }
+
+            nextStep();
+        }
+
+        function finalizeWinner(winnerFile) {
+            isSpinning = false;
+            currentSelectedFile = winnerFile;
+
+            const displayBox = document.getElementById('rouletteDisplayBox');
+            const prevSlot = document.getElementById('roulettePrevSlot');
+            const nextSlot = document.getElementById('rouletteNextSlot');
+            const slotName = document.getElementById('slotFileName');
+            const slotPath = document.getElementById('slotFilePath');
+            const slotIcon = document.getElementById('slotCategoryIcon');
+            const spinBtnText = document.getElementById('spinBtnText');
+
+            displayBox.classList.remove('roulette-active-glow');
+            displayBox.classList.add('winner-glow');
+            spinBtnText.textContent = 'SPIN AGAIN';
+
+            prevSlot.textContent = '★ WINNER SELECTED ★';
+            nextSlot.textContent = `${formatBytes(winnerFile.size)} • .${winnerFile.ext || 'file'}`;
+
+            slotName.textContent = winnerFile.name;
+            slotPath.textContent = winnerFile.path;
+            slotIcon.innerHTML = getCategoryIconHTML(winnerFile.category);
+            slotIcon.style.transform = 'scale(1.15)';
+
+            playWinnerSound();
+
+            // Record in History
+            pickedPathsSet.add(winnerFile.path);
+            sessionHistory.unshift({
+                file: winnerFile,
+                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+            });
+
+            renderHistoryLog();
+            applyFilters();
+            renderFilePreview(winnerFile);
+        }
+
+        // --- Built-in Instant File Previewer ---
+        async function renderFilePreview(fileItem) {
+            const viewport = document.getElementById('previewViewport');
+            const titleEl = document.getElementById('previewTitle');
+            const subtitleEl = document.getElementById('previewSubtitle');
+            const badgeEl = document.getElementById('previewFileBadge');
+            const actionsEl = document.getElementById('previewActions');
+
+            // Cleanup previous object URL to avoid memory leaks
+            if (currentObjectUrl) {
+                URL.revokeObjectURL(currentObjectUrl);
+                currentObjectUrl = null;
+            }
+
+            titleEl.textContent = fileItem.name;
+            subtitleEl.textContent = `${fileItem.path} (${formatBytes(fileItem.size)})`;
+            badgeEl.innerHTML = getCategoryIconHTML(fileItem.category);
+            actionsEl.classList.remove('hidden');
+            actionsEl.classList.add('flex');
+
+            // Handle Demo Virtual Files
+            if (fileItem.isDemo) {
+                if (fileItem.demoType === 'svg') {
+                    const blob = new Blob([fileItem.demoContent], { type: 'image/svg+xml' });
+                    currentObjectUrl = URL.createObjectURL(blob);
+                    viewport.innerHTML = `
+                        <div class="w-full flex flex-col items-center justify-center p-2">
+                            <div class="w-full max-w-2xl rounded-xl overflow-hidden border border-slate-800 shadow-lg">
+                                ${fileItem.demoContent}
+                            </div>
+                        </div>`;
+                    return;
+                } else if (fileItem.demoType === 'synth-audio') {
+                    viewport.innerHTML = `
+                        <div class="text-center py-10 space-y-4">
+                            <div class="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center mx-auto text-amber-400 text-2xl">
+                                <i class="fa-solid fa-music"></i>
+                            </div>
+                            <p class="text-sm font-bold text-white">${escapeHtml(fileItem.name)} (Demo Synth Loop)</p>
+                            <button onclick="playWinnerSound()" class="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition">
+                                <i class="fa-solid fa-play mr-1"></i> Play Retro Arpeggio Sample
+                            </button>
+                        </div>`;
+                    return;
+                } else {
+                    const blob = new Blob([fileItem.demoContent || ''], { type: 'text/plain;charset=utf-8' });
+                    currentObjectUrl = URL.createObjectURL(blob);
+                    viewport.innerHTML = `<pre class="w-full text-left font-mono text-xs text-emerald-300 bg-slate-950 p-4 rounded-xl overflow-x-auto whitespace-pre-wrap leading-relaxed">${escapeHtml(fileItem.demoContent)}</pre>`;
+                    return;
+                }
+            }
+
+            // Real Local PC File Preview via URL.createObjectURL
+            const rawFile = fileItem.fileObj;
+            if (!rawFile) return;
+
+            currentObjectUrl = URL.createObjectURL(rawFile);
+
+            if (fileItem.category === 'image') {
+                viewport.innerHTML = `
+                    <img src="${currentObjectUrl}" alt="${escapeHtml(fileItem.name)}" 
+                         class="max-h-[460px] w-auto object-contain rounded-xl shadow-lg border border-slate-800">
+                `;
+            } else if (fileItem.category === 'video') {
+                viewport.innerHTML = `
+                    <video src="${currentObjectUrl}" controls autoplay 
+                           class="max-h-[460px] w-full rounded-xl bg-black shadow-lg">
+                        Your browser does not support HTML5 video playback for this codec.
+                    </video>
+                `;
+            } else if (fileItem.category === 'audio') {
+                viewport.innerHTML = `
+                    <div class="w-full max-w-md text-center py-10 space-y-4">
+                        <div class="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center mx-auto text-amber-400 text-2xl animate-pulse">
+                            <i class="fa-solid fa-compact-disc"></i>
+                        </div>
+                        <div class="text-sm font-bold text-white truncate">${escapeHtml(fileItem.name)}</div>
+                        <audio src="${currentObjectUrl}" controls autoplay class="w-full"></audio>
+                    </div>
+                `;
+            } else if (fileItem.ext === 'pdf') {
+                viewport.innerHTML = `
+                    <iframe src="${currentObjectUrl}" class="w-full h-[460px] rounded-xl border border-slate-800 bg-white"></iframe>
+                `;
+            } else if (fileItem.category === 'code' || rawFile.size < 512 * 1024) {
+                // Attempt reading text content for code/text files up to 512KB
+                try {
+                    const textContent = await rawFile.text();
+                    // Check if binary file disguised as unknown extension
+                    if (textContent.includes('\u0000')) {
+                        renderGenericBinaryCard(viewport, fileItem);
+                    } else {
+                        const truncated = textContent.length > 25000 
+                            ? textContent.slice(0, 25000) + '\n\n... [Preview truncated at 25,000 characters. Open in New Tab for full file]' 
+                            : textContent;
+                        viewport.innerHTML = `<pre class="w-full text-left font-mono text-xs text-slate-200 bg-slate-950 p-4 rounded-xl overflow-x-auto whitespace-pre-wrap leading-relaxed">${escapeHtml(truncated)}</pre>`;
+                    }
+                } catch (e) {
+                    renderGenericBinaryCard(viewport, fileItem);
+                }
+            } else {
+                renderGenericBinaryCard(viewport, fileItem);
+            }
+        }
+
+        function renderGenericBinaryCard(viewport, fileItem) {
+            viewport.innerHTML = `
+                <div class="text-center py-10 space-y-4 max-w-md">
+                    <div class="w-16 h-16 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center mx-auto text-indigo-400 text-3xl">
+                        ${getCategoryIconHTML(fileItem.category)}
+                    </div>
+                    <div>
+                        <h4 class="text-base font-bold text-white break-all">${escapeHtml(fileItem.name)}</h4>
+                        <p class="text-xs text-slate-400 font-mono mt-1">${formatBytes(fileItem.size)} • .${escapeHtml(fileItem.ext || 'binary')}</p>
+                    </div>
+                    <p class="text-xs text-slate-400">
+                        This file format cannot be rendered directly inside a browser preview frame. Click below to open or launch it with your computer's default application.
+                    </p>
+                    <div class="flex items-center justify-center gap-3 pt-2">
+                        <button onclick="openFileInNewTab()" class="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition">
+                            <i class="fa-solid fa-arrow-up-right-from-square mr-1.5"></i> Open in New Tab
+                        </button>
+                        <button onclick="downloadOrLaunchFile()" class="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold border border-slate-700 transition">
+                            <i class="fa-solid fa-download mr-1.5"></i> Save / Launch Externally
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        // --- External Launch / Copy Actions ---
+        function openFileInNewTab() {
+            if (!currentSelectedFile) return;
+            if (currentObjectUrl) {
+                window.open(currentObjectUrl, '_blank');
+            } else {
+                showToast('Preview URL not available for this virtual demo item.', 'info');
+            }
+        }
+
+        function downloadOrLaunchFile() {
+            if (!currentSelectedFile || !currentObjectUrl) return;
+            const a = document.createElement('a');
+            a.href = currentObjectUrl;
+            a.download = currentSelectedFile.name;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            showToast(`Triggered download/launch for "${currentSelectedFile.name}"`, 'success');
+        }
+
+        function copyFilePath() {
+            if (!currentSelectedFile) return;
+            copyTextToClipboard(currentSelectedFile.path);
+            showToast('File path copied to clipboard!', 'success');
+        }
+
+        // --- History Management ---
+        function renderHistoryLog() {
+            const countEl = document.getElementById('historyCount');
+            const listEl = document.getElementById('historyList');
+            countEl.textContent = sessionHistory.length;
+
+            if (sessionHistory.length === 0) {
+                listEl.innerHTML = `<p class="text-xs text-slate-500 italic py-3 text-center">No files picked in this session yet.</p>`;
+                return;
+            }
+
+            listEl.innerHTML = sessionHistory.map((item, idx) => `
+                <div onclick="revisitHistoryItem(${idx})" class="cursor-pointer group flex items-center justify-between gap-3 p-2.5 rounded-xl bg-slate-950/70 hover:bg-slate-800/80 border border-slate-800/80 transition">
+                    <div class="flex items-center gap-3 min-w-0">
+                        <div class="w-8 h-8 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-center shrink-0">
+                            ${getCategoryIconHTML(item.file.category)}
+                        </div>
+                        <div class="min-w-0">
+                            <div class="text-xs font-bold text-slate-200 group-hover:text-indigo-300 truncate transition">${escapeHtml(item.file.name)}</div>
+                            <div class="text-[11px] font-mono text-slate-500 truncate">${escapeHtml(item.file.path)}</div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2 shrink-0">
+                        <span class="text-[11px] font-mono text-slate-500">${item.timestamp}</span>
+                        <span class="text-xs text-slate-400 group-hover:text-white px-2 py-1 rounded bg-slate-900">View</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function revisitHistoryItem(idx) {
+            const entry = sessionHistory[idx];
+            if (!entry) return;
+            currentSelectedFile = entry.file;
+            document.getElementById('slotFileName').textContent = entry.file.name;
+            document.getElementById('slotFilePath').textContent = entry.file.path;
+            document.getElementById('slotCategoryIcon').innerHTML = getCategoryIconHTML(entry.file.category);
+            renderFilePreview(entry.file);
+        }
+
+        function clearHistory() {
+            sessionHistory = [];
+            pickedPathsSet.clear();
+            renderHistoryLog();
+            applyFilters();
+            showToast('Session history cleared — all files eligible again!', 'info');
+        }
+
+        // --- Native Desktop Script Generator (Python / PowerShell / Bash) ---
+        function updateGeneratedScripts() {
+            const targetPath = document.getElementById('scriptPathInput').value.trim() || '.';
+            const extRaw = document.getElementById('scriptExtInput').value.trim() || '*';
+            const isRecursive = document.getElementById('scriptRecursiveToggle').checked;
+            const useGui = document.getElementById('scriptGuiToggle').checked;
+
+            const extArray = extRaw === '*' 
+                ? [] 
+                : extRaw.split(',').map(e => {
+                    const cl = e.trim().toLowerCase();
+                    return cl.startsWith('.') ? cl : '.' + cl;
+                }).filter(Boolean);
+
+            const extFilterPython = extArray.length > 0 
+                ? `ALLOWED_EXTENSIONS = ${JSON.stringify(extArray)}` 
+                : `ALLOWED_EXTENSIONS = None  # None means all file types are allowed`;
+
+            let pythonCode = `#!/usr/bin/env python3
+"""
+Random File Roulette — Native Desktop Opener
+Scans a target directory and opens one random file in your default OS application.
+Works on Windows (os.startfile), macOS (open), and Linux (xdg-open).
+"""
+import os
+import sys
+import random
+import subprocess
+from pathlib import Path
+
+TARGET_DIR = r"${targetPath}"
+${extFilterPython}
+RECURSIVE = ${isRecursive ? 'True' : 'False'}
+IGNORED_FOLDERS = {"node_modules", ".git", "__pycache__", ".venv", "venv"}
+
+def collect_eligible_files(base_dir):
+    base = Path(base_dir).expanduser().resolve()
+    if not base.exists():
+        print(f"[Error] Directory not found: {base}")
+        return []
+
+    files = []
+    if RECURSIVE:
+        for root, dirs, filenames in os.walk(base):
+            # Exclude hidden and heavy dev folders
+            dirs[:] = [d for d in dirs if not d.startswith('.') and d not in IGNORED_FOLDERS]
+            for fname in filenames:
+                if fname.startswith('.'):
+                    continue
+                if ALLOWED_EXTENSIONS and not fname.lower().endswith(tuple(ALLOWED_EXTENSIONS)):
+                    continue
+                files.append(Path(root) / fname)
+    else:
+        for item in base.iterdir():
+            if item.is_file() and not item.name.startswith('.'):
+                if ALLOWED_EXTENSIONS and not item.name.lower().endswith(tuple(ALLOWED_EXTENSIONS)):
+                    continue
+                files.append(item)
+    return files
+
+def launch_file_in_os(filepath):
+    """Opens the file with the operating system's default registered application."""
+    filepath_str = str(filepath)
+    print(f"🎲 Opening Random File: {filepath_str}")
+    if sys.platform.startswith("win"):
+        os.startfile(filepath_str)
+    elif sys.platform == "darwin":
+        subprocess.run(["open", filepath_str], check=False)
+    else:
+        subprocess.run(["xdg-open", filepath_str], check=False)
+`;
+
+            if (useGui) {
+                pythonCode += `
+def run_gui():
+    import tkinter as tk
+    from tkinter import filedialog, messagebox
+
+    files = collect_eligible_files(TARGET_DIR)
+
+    root = tk.Tk()
+    root.title("🎲 Random File Roulette")
+    root.geometry("520x270")
+    root.configure(bg="#0f172a")
+
+    status_var = tk.StringVar(value=f"Loaded {len(files)} files from {TARGET_DIR}")
+    picked_var = tk.StringVar(value="Click 'Spin & Launch' to open a random file!")
+
+    def pick_and_open():
+        nonlocal files
+        if not files:
+            messagebox.showwarning("Empty Pool", "No matching files found! Choose a folder first.")
+            return
+        chosen = random.choice(files)
+        picked_var.set(chosen.name)
+        status_var.set(str(chosen))
+        launch_file_in_os(chosen)
+
+    def change_folder():
+        nonlocal files
+        selected = filedialog.askdirectory(initialdir=TARGET_DIR)
+        if selected:
+            files = collect_eligible_files(selected)
+            status_var.set(f"Loaded {len(files)} files from {selected}")
+
+    tk.Label(root, textvariable=picked_var, fg="#f8fafc", bg="#0f172a", font=("Segoe UI", 13, "bold"), wraplength=480).pack(pady=(28, 6))
+    tk.Label(root, textvariable=status_var, fg="#94a3b8", bg="#0f172a", font=("Consolas", 9), wraplength=480).pack(pady=(0, 22))
+
+    btn_frame = tk.Frame(root, bg="#0f172a")
+    btn_frame.pack()
+
+    tk.Button(btn_frame, text="🎲 SPIN & LAUNCH RANDOM FILE", command=pick_and_open, bg="#4f46e5", fg="white", font=("Segoe UI", 11, "bold"), padx=18, pady=10, relief="flat").pack(side="left", padx=6)
+    tk.Button(btn_frame, text="📁 Change Folder", command=change_folder, bg="#1e293b", fg="#cbd5e1", font=("Segoe UI", 10), padx=12, pady=10, relief="flat").pack(side="left", padx=6)
+
+    root.mainloop()
+
+if __name__ == "__main__":
+    run_gui()
+`;
+            } else {
+                pythonCode += `
+if __name__ == "__main__":
+    pool = collect_eligible_files(TARGET_DIR)
+    if not pool:
+        print("No matching files found in target directory.")
+        sys.exit(1)
+    winner = random.choice(pool)
+    launch_file_in_os(winner)
+`;
+            }
+
+            document.getElementById('pythonCodeBlock').textContent = pythonCode;
+
+            // PowerShell One-Liner
+            const psRecurse = isRecursive ? '-Recurse' : '';
+            const psInclude = extArray.length > 0 ? `-Include ${extArray.map(e => `"*${e}"`).join(',')}` : '';
+            const psCommand = `Get-ChildItem -Path "${targetPath}" -File ${psRecurse} ${psInclude} | Get-Random | Invoke-Item`;
+            document.getElementById('powershellCodeBlock').textContent = psCommand.replace(/\s+/g, ' ').trim();
+
+            // macOS / Linux Terminal One-Liner
+            const depthFlag = isRecursive ? '' : '-maxdepth 1 ';
+            const bashCommand = `find "${targetPath}" ${depthFlag}-type f -not -path '*/.*' | shuf -n 1 | xargs -I {} open "{}"`;
+            document.getElementById('bashCodeBlock').textContent = bashCommand;
+        }
+
+        function downloadPythonScript() {
+            updateGeneratedScripts();
+            const code = document.getElementById('pythonCodeBlock').textContent;
+            const blob = new Blob([code], { type: 'text/x-python;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'random_file_opener.py';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showToast('Downloaded random_file_opener.py!', 'success');
+        }
+
+        // --- Utilities: Clipboard, HTML Escaping & Toast Notifications ---
+        function copyCodeBlock(elementId) {
+            const text = document.getElementById(elementId).textContent;
+            copyTextToClipboard(text);
+            showToast('Code copied to clipboard!', 'success');
+        }
+
+        function copyTextToClipboard(text) {
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            textarea.style.position = 'fixed';
+            textarea.style.opacity = '0';
+            document.body.appendChild(textarea);
+            textarea.select();
+            try {
+                document.execCommand('copy');
+            } catch (err) {}
+            document.body.removeChild(textarea);
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            const colors = {
+                success: 'bg-emerald-950/95 border-emerald-500/40 text-emerald-200',
+                warning: 'bg-amber-950/95 border-amber-500/40 text-amber-200',
+                info:    'bg-slate-900/95 border-indigo-500/40 text-slate-200'
+            };
+            const icons = {
+                success: '<i class="fa-solid fa-circle-check text-emerald-400"></i>',
+                warning: '<i class="fa-solid fa-triangle-exclamation text-amber-400"></i>',
+                info:    '<i class="fa-solid fa-circle-info text-indigo-400"></i>'
+            };
+
+            toast.className = `pointer-events-auto flex items-center gap-2.5 px-4 py-3 rounded-xl border shadow-xl text-xs font-medium backdrop-blur-md transition-all duration-300 ${colors[type] || colors.info}`;
+            toast.innerHTML = `${icons[type] || icons.info}<span>${escapeHtml(message)}</span>`;
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateY(8px)';
+                setTimeout(() => toast.remove(), 300);
+            }, 3200);
+        }
+
+        // --- Keyboard Shortcut: Spacebar to Spin ---
+        window.addEventListener('keydown', (e) => {
+            const tag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
+            if (e.code === 'Space' && tag !== 'input' && tag !== 'textarea' && !document.getElementById('viewWebApp').classList.contains('hidden')) {
+                e.preventDefault();
+                spinRoulette();
+            }
+        });
+
+        // Initialize Script Generator on Load
+        window.addEventListener('DOMContentLoaded', () => {
+            updateGeneratedScripts();
+        });
+    </script>
+
+    <!-- ========================================================== -->
+    <!-- FIREBASE REAL-TIME MULTIPLAYER 2/3 TRIBUNAL MODULE         -->
+    <!-- ========================================================== -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, addDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- Firebase Setup & State ---
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'random-file-roulette-tribunal';
+        let db = null;
+        let auth = null;
+        let currentUser = null;
+        let myUserId = 'local-' + Math.random().toString(36).substring(2, 9);
+        let myNickname = 'Player_' + Math.floor(100 + Math.random() * 900);
+        let currentRoomCode = 'LOBBY1';
+        let isOfflineMode = false;
+
+        // Room synced collections
+        let roomPlayers = [];
+        let roomReveals = [];
+        let unsubPlayers = null;
+        let unsubReveals = null;
+        let lastTriggeredVerdictId = null;
+        let pendingVetoTimer = null;
+
+        // Alarm sound when 2/3 verdict is reached
+        function playTribunalAlarmSound() {
+            if (!soundEnabled) return;
+            try {
+                initAudio();
+                if (!audioCtx) return;
+                const freqs = [440, 587.33, 440, 659.25];
+                freqs.forEach((f, idx) => {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'sawtooth';
+                    const start = audioCtx.currentTime + idx * 0.13;
+                    osc.frequency.setValueAtTime(f, start);
+                    gain.gain.setValueAtTime(0.09, start);
+                    gain.gain.exponentialRampToValueAtTime(0.001, start + 0.12);
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.start(start);
+                    osc.stop(start + 0.13);
+                });
+            } catch (e) {}
+        }
+
+        // Initialize Firebase Auth & Firestore adhering strictly to Rules 1, 2, 3
+        async function initMultiplayerFirebase() {
+            document.getElementById('mpNicknameInput').value = myNickname;
+            document.getElementById('mpRoomCodeInput').value = currentRoomCode;
+
+            try {
+                if (typeof __firebase_config !== 'undefined' && __firebase_config) {
+                    const firebaseConfig = JSON.parse(__firebase_config);
+                    const app = initializeApp(firebaseConfig);
+                    auth = getAuth(app);
+                    db = getFirestore(app);
+
+                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                        await signInWithCustomToken(auth, __initial_auth_token);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+
+                    currentUser = auth.currentUser;
+                    if (currentUser) {
+                        myUserId = currentUser.uid;
+                    }
+
+                    const statusBadge = document.getElementById('mpConnectionStatus');
+                    statusBadge.textContent = 'Live Cloud Sync';
+                    statusBadge.className = 'text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30';
+                    document.getElementById('mpUserIdDisplay').textContent = myUserId;
+
+                    await joinFirestoreRoom(currentRoomCode);
+                } else {
+                    enableLocalSimulationFallback();
+                }
+            } catch (err) {
+                enableLocalSimulationFallback();
+            }
+        }
+
+        function enableLocalSimulationFallback() {
+            isOfflineMode = true;
+            const statusBadge = document.getElementById('mpConnectionStatus');
+            statusBadge.textContent = 'Local Party Simulation';
+            statusBadge.className = 'text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30';
+            document.getElementById('mpUserIdDisplay').textContent = myUserId;
+
+            roomPlayers = [{
+                id: myUserId,
+                name: myNickname,
+                room: currentRoomCode,
+                poolCount: eligibleFiles.length,
+                votedFor: '',
+                isBot: false,
+                updatedAt: Date.now()
+            }];
+            renderMultiplayerState();
+        }
+
+        // Join or switch room using Rule 1 strict paths
+        async function joinFirestoreRoom(roomCode) {
+            currentRoomCode = (roomCode || 'LOBBY1').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6) || 'LOBBY1';
+            document.getElementById('mpRoomCodeInput').value = currentRoomCode;
+            document.getElementById('mpCurrentRoomBadge').textContent = currentRoomCode;
+
+            if (isOfflineMode || !db || !currentUser) {
+                renderMultiplayerState();
+                return;
+            }
+
+            if (unsubPlayers) unsubPlayers();
+            if (unsubReveals) unsubReveals();
+
+            // Register/update current player doc in `/artifacts/{appId}/public/data/tribunal_players`
+            await upsertMyPlayerDoc();
+
+            const playersCol = collection(db, 'artifacts', appId, 'public', 'data', 'tribunal_players');
+            unsubPlayers = onSnapshot(playersCol, (snapshot) => {
+                const allPlayers = [];
+                snapshot.forEach(docSnap => {
+                    const data = docSnap.data();
+                    if (data && data.room === currentRoomCode) {
+                        allPlayers.push({ id: docSnap.id, ...data });
+                    }
+                });
+                allPlayers.sort((a, b) => (a.updatedAt || 0) - (b.updatedAt || 0));
+                roomPlayers = allPlayers;
+                renderMultiplayerState();
+                checkSupermajorityTribunal();
+            }, (err) => {
+                console.error('Players listener error:', err);
+            });
+
+            const revealsCol = collection(db, 'artifacts', appId, 'public', 'data', 'tribunal_reveals');
+            unsubReveals = onSnapshot(revealsCol, (snapshot) => {
+                const allReveals = [];
+                snapshot.forEach(docSnap => {
+                    const data = docSnap.data();
+                    if (data && data.room === currentRoomCode) {
+                        allReveals.push({ id: docSnap.id, ...data });
+                    }
+                });
+                allReveals.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+                roomReveals = allReveals;
+                renderRevealsFeed();
+            }, (err) => {
+                console.error('Reveals listener error:', err);
+            });
+        }
+
+        async function upsertMyPlayerDoc(extraFields = {}) {
+            if (isOfflineMode) {
+                const me = roomPlayers.find(p => p.id === myUserId);
+                if (me) {
+                    Object.assign(me, {
+                        name: myNickname,
+                        room: currentRoomCode,
+                        poolCount: eligibleFiles.length,
+                        ...extraFields
+                    });
+                }
+                renderMultiplayerState();
+                checkSupermajorityTribunal();
+                return;
+            }
+            if (!currentUser || !db) return;
+
+            const playerRef = doc(db, 'artifacts', appId, 'public', 'data', 'tribunal_players', myUserId);
+            const existing = roomPlayers.find(p => p.id === myUserId);
+            await setDoc(playerRef, {
+                name: myNickname,
+                room: currentRoomCode,
+                poolCount: eligibleFiles.length,
+                votedFor: existing ? (existing.votedFor || '') : '',
+                isBot: false,
+                updatedAt: Date.now(),
+                ...extraFields
+            }, { merge: true });
+        }
+
+        // --- Calculate 2/3 Supermajority Threshold ---
+        function getTwoThirdsThreshold(totalPlayers) {
+            if (totalPlayers <= 1) return 1;
+            return Math.ceil((2 * totalPlayers) / 3);
+        }
+
+        // --- Render Players & Voting Cards ---
+        function renderMultiplayerState() {
+            const totalPlayers = Math.max(1, roomPlayers.length);
+            const neededVotes = getTwoThirdsThreshold(totalPlayers);
+
+            document.getElementById('mpPlayerCount').textContent = totalPlayers;
+            document.getElementById('mpThresholdDisplay').textContent = `${neededVotes} of ${totalPlayers} votes needed (2/3)`;
+            document.getElementById('mpLocalPoolBadge').textContent = `${eligibleFiles.length} files ready`;
+
+            // Tally votes against each player
+            const voteTallies = {};
+            const votersMap = {};
+            roomPlayers.forEach(p => {
+                voteTallies[p.id] = 0;
+                votersMap[p.id] = [];
+            });
+
+            roomPlayers.forEach(voter => {
+                if (voter.votedFor && voteTallies[voter.votedFor] !== undefined) {
+                    voteTallies[voter.votedFor]++;
+                    votersMap[voter.votedFor].push(voter.name);
+                }
+            });
+
+            const me = roomPlayers.find(p => p.id === myUserId);
+            const myCurrentTarget = me ? me.votedFor : '';
+
+            const grid = document.getElementById('mpPlayersGrid');
+            grid.innerHTML = roomPlayers.map(player => {
+                const count = voteTallies[player.id] || 0;
+                const pct = Math.min(100, Math.round((count / neededVotes) * 100));
+                const isMe = player.id === myUserId;
+                const iVotedThis = myCurrentTarget === player.id;
+                const reachedVerdict = count >= neededVotes;
+                const voterNames = votersMap[player.id] || [];
+
+                return `
+                    <div class="rounded-2xl p-4 border transition-all ${reachedVerdict ? 'bg-rose-950/40 border-rose-500 shadow-lg shadow-rose-600/20' : 'bg-slate-900/90 border-slate-800 hover:border-slate-700'}">
+                        <div class="flex items-start justify-between gap-2">
+                            <div class="flex items-center gap-3 min-w-0">
+                                <div class="w-10 h-10 rounded-xl ${isMe ? 'bg-indigo-600 text-white' : player.isBot ? 'bg-purple-600/30 text-purple-300 border border-purple-500/30' : 'bg-slate-800 text-slate-200'} flex items-center justify-center font-extrabold text-sm shrink-0">
+                                    ${player.isBot ? '<i class="fa-solid fa-robot"></i>' : escapeHtml((player.name || 'P')[0].toUpperCase())}
+                                </div>
+                                <div class="min-w-0">
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="text-sm font-bold text-white truncate">${escapeHtml(player.name)}</span>
+                                        ${isMe ? '<span class="text-[10px] px-1.5 py-0.2 rounded bg-indigo-500/20 text-indigo-300 font-bold">YOU</span>' : ''}
+                                        ${player.isBot ? '<span class="text-[10px] px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300 font-bold">BOT</span>' : ''}
+                                    </div>
+                                    <div class="text-[11px] text-slate-400 font-mono truncate">
+                                        Pool: <span class="${player.poolCount > 0 ? 'text-emerald-400' : 'text-amber-400'}">${player.poolCount || 0} files</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <span class="text-xs font-mono font-extrabold px-2.5 py-1 rounded-lg ${reachedVerdict ? 'bg-rose-500 text-white' : 'bg-slate-950 text-slate-300 border border-slate-800'}">
+                                ${count} / ${neededVotes}
+                            </span>
+                        </div>
+
+                        <!-- Progress Bar toward 2/3 Supermajority -->
+                        <div class="mt-3 w-full h-2.5 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
+                            <div class="h-full transition-all duration-300 ${reachedVerdict ? 'bg-gradient-to-r from-rose-500 to-amber-400' : 'bg-gradient-to-r from-indigo-500 to-rose-500'}"
+                                 style="width: ${pct}%"></div>
+                        </div>
+
+                        <div class="mt-2 flex items-center justify-between text-[11px] text-slate-400 min-h-[18px]">
+                            <span class="truncate">
+                                ${voterNames.length > 0 ? `Voted by: ${escapeHtml(voterNames.join(', '))}` : 'No votes against yet'}
+                            </span>
+                        </div>
+
+                        <!-- Vote Button -->
+                        <button onclick="window.mpCastVote('${player.id}')"
+                                class="mt-3 w-full py-2 px-3 rounded-xl text-xs font-extrabold transition flex items-center justify-center gap-2 ${iVotedThis ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-600/30' : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'}">
+                            <i class="fa-solid fa-gavel"></i>
+                            <span>${iVotedThis ? 'Voted! (Click to Unvote)' : `Vote to Spin ${escapeHtml(player.name)}'s PC`}</span>
+                        </button>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // --- Check if Any Player Has Reached >= 2/3 Votes ---
+        function checkSupermajorityTribunal() {
+            if (roomPlayers.length === 0) return;
+            const totalPlayers = roomPlayers.length;
+            const neededVotes = getTwoThirdsThreshold(totalPlayers);
+
+            const voteTallies = {};
+            roomPlayers.forEach(p => { voteTallies[p.id] = 0; });
+            roomPlayers.forEach(voter => {
+                if (voter.votedFor && voteTallies[voter.votedFor] !== undefined) {
+                    voteTallies[voter.votedFor]++;
+                }
+            });
+
+            // Find first player who crossed the 2/3 threshold
+            let targetPlayer = null;
+            for (const p of roomPlayers) {
+                if ((voteTallies[p.id] || 0) >= neededVotes) {
+                    targetPlayer = p;
+                    break;
+                }
+            }
+
+            const banner = document.getElementById('mpVerdictAlertBanner');
+            if (!targetPlayer) {
+                banner.classList.add('hidden');
+                lastTriggeredVerdictId = null;
+                return;
+            }
+
+            // Unique signature for this verdict round
+            const verdictSignature = `${targetPlayer.id}-${voteTallies[targetPlayer.id]}`;
+            if (lastTriggeredVerdictId === verdictSignature) return;
+            lastTriggeredVerdictId = verdictSignature;
+
+            playTribunalAlarmSound();
+            banner.classList.remove('hidden');
+            document.getElementById('mpVerdictHeadline').textContent =
+                `2/3 Verdict on ${targetPlayer.name}! (${voteTallies[targetPlayer.id]}/${totalPlayers} votes) — Opening 1 Random File...`;
+
+            // If the targeted player is ME (or a Bot simulated by my client), trigger the random file pick!
+            if (targetPlayer.id === myUserId || targetPlayer.isBot) {
+                triggerTargetRouletteExecution(targetPlayer);
+            }
+        }
+
+        // --- Execute Roulette on Target Player & Broadcast Reveal ---
+        function triggerTargetRouletteExecution(targetPlayer) {
+            if (allScannedFiles.length === 0) {
+                loadDemoFiles();
+            }
+
+            const pool = eligibleFiles.length > 0 ? eligibleFiles : allScannedFiles;
+            if (pool.length === 0) return;
+
+            let chosenFile = pool[Math.floor(Math.random() * pool.length)];
+            const safetyVetoEnabled = document.getElementById('mpSafetyVetoToggle').checked;
+            const vetoBox = document.getElementById('mpVetoControlBox');
+            const countdownText = document.getElementById('mpVetoCountdownText');
+
+            if (targetPlayer.id === myUserId && safetyVetoEnabled) {
+                vetoBox.classList.remove('hidden');
+                vetoBox.classList.add('flex');
+                let secondsLeft = 3;
+                countdownText.textContent = `Opening "${chosenFile.name}" in ${secondsLeft}s...`;
+
+                if (pendingVetoTimer) clearInterval(pendingVetoTimer);
+                pendingVetoTimer = setInterval(() => {
+                    secondsLeft--;
+                    if (secondsLeft > 0) {
+                        countdownText.textContent = `Opening "${chosenFile.name}" in ${secondsLeft}s...`;
+                    } else {
+                        clearInterval(pendingVetoTimer);
+                        pendingVetoTimer = null;
+                        vetoBox.classList.add('hidden');
+                        executeAndBroadcastFile(targetPlayer, chosenFile);
+                    }
+                }, 1000);
+
+                window.mpCurrentPendingTarget = targetPlayer;
+            } else {
+                vetoBox.classList.add('hidden');
+                executeAndBroadcastFile(targetPlayer, chosenFile);
+            }
+        }
+
+        async function executeAndBroadcastFile(targetPlayer, chosenFile) {
+            // Also spin & preview locally on the target's main roulette previewer
+            if (targetPlayer.id === myUserId) {
+                finalizeWinner(chosenFile);
+                showToast(`Tribunal Verdict! Opened random file: ${chosenFile.name}`, 'warning');
+            } else {
+                playWinnerSound();
+            }
+
+            // Prepare safe preview snippet (text or SVG demo or metadata) to share with the room
+            let snippet = '';
+            if (chosenFile.isDemo && chosenFile.demoContent) {
+                snippet = chosenFile.demoContent.slice(0, 1200);
+            } else if (chosenFile.fileObj && chosenFile.category === 'code' && chosenFile.size < 64 * 1024) {
+                try {
+                    const txt = await chosenFile.fileObj.text();
+                    if (!txt.includes('\u0000')) {
+                        snippet = txt.slice(0, 800);
+                    }
+                } catch (e) {}
+            }
+
+            const revealPayload = {
+                room: currentRoomCode,
+                targetId: targetPlayer.id,
+                targetName: targetPlayer.name,
+                fileName: chosenFile.name,
+                filePath: chosenFile.path,
+                fileSize: chosenFile.size,
+                fileExt: chosenFile.ext || 'file',
+                category: chosenFile.category,
+                isDemoSvg: chosenFile.isDemo && chosenFile.demoType === 'svg',
+                snippet: snippet,
+                timestamp: Date.now(),
+                timeLabel: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+            };
+
+            if (isOfflineMode || !db || !currentUser) {
+                roomReveals.unshift(revealPayload);
+                renderRevealsFeed();
+            } else {
+                const revealsCol = collection(db, 'artifacts', appId, 'public', 'data', 'tribunal_reveals');
+                await addDoc(revealsCol, revealPayload);
+            }
+
+            // Clear votes after verdict execution so a new round can begin
+            setTimeout(() => {
+                mpResetAllVotes();
+            }, 1800);
+        }
+
+        // --- Render Live Synced Reveal Stage & Feed ---
+        function renderRevealsFeed() {
+            const stageViewport = document.getElementById('mpLiveRevealViewport');
+            const ownerBadge = document.getElementById('mpRevealOwnerBadge');
+            const feedEl = document.getElementById('mpActivityFeed');
+
+            if (roomReveals.length === 0) {
+                return;
+            }
+
+            const latest = roomReveals[0];
+            ownerBadge.textContent = `${latest.targetName}'s PC • ${latest.timeLabel}`;
+            ownerBadge.className = 'text-[11px] font-mono font-bold px-2.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30';
+
+            let previewBodyHTML = '';
+            if (latest.isDemoSvg && latest.snippet) {
+                previewBodyHTML = `<div class="w-full max-w-md rounded-xl overflow-hidden border border-slate-800 my-2">${latest.snippet}</div>`;
+            } else if (latest.snippet) {
+                previewBodyHTML = `<pre class="w-full text-left font-mono text-xs text-emerald-300 bg-slate-900/90 p-3 rounded-xl overflow-x-auto whitespace-pre-wrap max-h-48 mt-2 border border-slate-800">${escapeHtml(latest.snippet)}</pre>`;
+            }
+
+            stageViewport.innerHTML = `
+                <div class="w-full text-left space-y-2">
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="text-[11px] font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                            <i class="fa-solid fa-gavel mr-1"></i> 2/3 Tribunal Opened File
+                        </span>
+                        <span class="text-xs font-mono text-slate-400">${formatBytes(latest.fileSize || 0)}</span>
+                    </div>
+                    <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-center text-lg shrink-0">
+                            ${getCategoryIconHTML(latest.category)}
+                        </div>
+                        <div class="min-w-0">
+                            <div class="text-sm font-extrabold text-white truncate">${escapeHtml(latest.fileName)}</div>
+                            <div class="text-[11px] font-mono text-slate-400 truncate">${escapeHtml(latest.filePath)}</div>
+                        </div>
+                    </div>
+                    ${previewBodyHTML}
+                </div>
+            `;
+
+            feedEl.innerHTML = roomReveals.slice(0, 12).map(item => `
+                <div class="p-2.5 rounded-xl bg-slate-950/80 border border-slate-800/90 flex items-center justify-between gap-2">
+                    <div class="flex items-center gap-2.5 min-w-0">
+                        <div class="w-7 h-7 rounded-lg bg-slate-900 flex items-center justify-center text-xs shrink-0">
+                            ${getCategoryIconHTML(item.category)}
+                        </div>
+                        <div class="min-w-0">
+                            <div class="text-xs text-slate-200 truncate">
+                                <span class="font-bold text-rose-400">${escapeHtml(item.targetName)}</span> opened
+                                <span class="font-mono font-semibold text-white">${escapeHtml(item.fileName)}</span>
+                            </div>
+                            <div class="text-[10px] font-mono text-slate-500 truncate">${escapeHtml(item.filePath)}</div>
+                        </div>
+                    </div>
+                    <span class="text-[10px] font-mono text-slate-500 shrink-0">${item.timeLabel || ''}</span>
+                </div>
+            `).join('');
+        }
+
+        // --- Expose Global Handlers for UI Buttons ---
+        window.onMultiplayerTabOpened = () => {
+            if (allScannedFiles.length === 0) {
+                loadDemoFiles();
+            }
+            upsertMyPlayerDoc({ poolCount: eligibleFiles.length });
+        };
+
+        window.mpSyncPoolCount = (count) => {
+            upsertMyPlayerDoc({ poolCount: count });
+        };
+
+        window.mpUpdateProfile = () => {
+            const val = document.getElementById('mpNicknameInput').value.trim();
+            if (val) {
+                myNickname = val;
+                upsertMyPlayerDoc({ name: myNickname });
+                showToast(`Nickname updated to "${myNickname}"`, 'info');
+            }
+        };
+
+        window.mpCreateOrJoinRoom = () => {
+            const code = document.getElementById('mpRoomCodeInput').value.trim().toUpperCase() || 'LOBBY1';
+            joinFirestoreRoom(code);
+            showToast(`Joined Multiplayer Room: ${code}`, 'success');
+        };
+
+        window.mpCopyRoomCode = () => {
+            copyTextToClipboard(currentRoomCode);
+            showToast(`Room Code "${currentRoomCode}" copied! Share it with friends.`, 'success');
+        };
+
+        window.mpCastVote = async (targetPlayerId) => {
+            playTickSound(620);
+            const me = roomPlayers.find(p => p.id === myUserId);
+            const newVote = (me && me.votedFor === targetPlayerId) ? '' : targetPlayerId;
+            await upsertMyPlayerDoc({ votedFor: newVote });
+        };
+
+        window.mpVetoAndRespin = () => {
+            if (pendingVetoTimer) {
+                clearInterval(pendingVetoTimer);
+                pendingVetoTimer = null;
+            }
+            showToast('File Vetoed! Spinning a different random file...', 'info');
+            if (window.mpCurrentPendingTarget) {
+                triggerTargetRouletteExecution(window.mpCurrentPendingTarget);
+            }
+        };
+
+        window.mpResetAllVotes = async () => {
+            document.getElementById('mpVerdictAlertBanner').classList.add('hidden');
+            lastTriggeredVerdictId = null;
+
+            if (isOfflineMode || !db || !currentUser) {
+                roomPlayers.forEach(p => { p.votedFor = ''; });
+                renderMultiplayerState();
+                return;
+            }
+
+            for (const p of roomPlayers) {
+                if (p.id === myUserId || p.isBot) {
+                    const pRef = doc(db, 'artifacts', appId, 'public', 'data', 'tribunal_players', p.id);
+                    await updateDoc(pRef, { votedFor: '', updatedAt: Date.now() }).catch(() => {});
+                }
+            }
+        };
+
+        // Add interactive AI Bots to test the 2/3 supermajority voting rules right away
+        window.mpStartBotSimulation = async () => {
+            if (allScannedFiles.length === 0) loadDemoFiles();
+
+            const botNames = ['CyberAlex', 'PixelSam'];
+            for (let i = 0; i < botNames.length; i++) {
+                const botId = `bot-${currentRoomCode}-${i + 1}`;
+                const botData = {
+                    name: botNames[i],
+                    room: currentRoomCode,
+                    poolCount: 7,
+                    votedFor: '',
+                    isBot: true,
+                    updatedAt: Date.now() + i
+                };
+
+                if (isOfflineMode || !db || !currentUser) {
+                    const idx = roomPlayers.findIndex(p => p.id === botId);
+                    if (idx === -1) roomPlayers.push({ id: botId, ...botData });
+                } else {
+                    const botRef = doc(db, 'artifacts', appId, 'public', 'data', 'tribunal_players', botId);
+                    await setDoc(botRef, botData, { merge: true });
+                }
+            }
+
+            renderMultiplayerState();
+            showToast('Added 2 AI Bots! With 3 players in the room, 2 votes (2/3) triggers the Roulette Verdict.', 'success');
+        };
+
+        // Make Bots cast a 2/3 supermajority vote on the user to demonstrate being voted on
+        window.mpSimulateBotVotesOnMe = async () => {
+            const bots = roomPlayers.filter(p => p.isBot);
+            if (bots.length === 0) {
+                await window.mpStartBotSimulation();
+            }
+
+            if (isOfflineMode || !db || !currentUser) {
+                roomPlayers.forEach(p => {
+                    if (p.isBot) p.votedFor = myUserId;
+                });
+                renderMultiplayerState();
+                checkSupermajorityTribunal();
+                return;
+            }
+
+            for (const p of roomPlayers) {
+                if (p.isBot) {
+                    const botRef = doc(db, 'artifacts', appId, 'public', 'data', 'tribunal_players', p.id);
+                    await updateDoc(botRef, { votedFor: myUserId, updatedAt: Date.now() });
+                }
+            }
+            showToast('Bots cast a 2/3 supermajority vote on you!', 'warning');
+        };
+
+        // Start Firebase connection
+        initMultiplayerFirebase();
+    </script>
+</body>
+</html>
