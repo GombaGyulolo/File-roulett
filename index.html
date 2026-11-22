@@ -8,6 +8,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Font Awesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <!-- PeerJS WebRTC P2P Library (Works out-of-the-box on GitHub Pages without any backend config) -->
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
     <!-- Google Fonts: Inter & JetBrains Mono -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     
@@ -423,26 +425,33 @@
         <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-xl mb-6">
             <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                 
-                <!-- Player Profile & Auth ID -->
+                <!-- Player Profile & GitHub Pages P2P Status -->
                 <div class="flex flex-wrap items-center gap-3">
                     <div class="w-11 h-11 rounded-2xl bg-gradient-to-br from-rose-500 to-indigo-600 flex items-center justify-center text-white text-lg font-extrabold shadow-lg shadow-rose-500/20">
                         <i class="fa-solid fa-gavel"></i>
                     </div>
                     <div>
-                        <div class="flex items-center gap-2">
+                        <div class="flex flex-wrap items-center gap-2">
                             <h2 class="text-base font-extrabold text-white">Tribunal Party Lobby</h2>
-                            <span id="mpConnectionStatus" class="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700">
-                                Connecting...
+                            <span id="mpConnectionStatus" class="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                                GitHub Pages P2P Ready
+                            </span>
+                            <span id="mpRoleBadge" class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                                HOST
                             </span>
                         </div>
-                        <p class="text-xs text-slate-400 mt-0.5">
-                            Your Player ID: <code id="mpUserIdDisplay" class="text-indigo-300 font-mono select-all">authenticating...</code>
+                        <p class="text-xs text-slate-400 mt-0.5 flex flex-wrap items-center gap-2">
+                            <span>Peer ID: <code id="mpUserIdDisplay" class="text-indigo-300 font-mono select-all">initializing...</code></span>
+                            <span class="text-slate-700">•</span>
+                            <button onclick="mpToggleFirebaseModal()" class="text-[11px] text-slate-400 hover:text-indigo-300 underline decoration-dotted">
+                                Engine: <span id="mpEngineLabel">WebRTC P2P + Multi-Tab</span> (Configure)
+                            </button>
                         </p>
                     </div>
                 </div>
 
                 <!-- Nickname & Room Controls -->
-                <div class="flex flex-wrap items-center gap-2.5">
+                <div class="flex flex-wrap items-center gap-2">
                     <div class="flex items-center bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5">
                         <i class="fa-regular fa-user text-slate-500 text-xs mr-2"></i>
                         <input id="mpNicknameInput" type="text" placeholder="Your Nickname" maxlength="18"
@@ -453,45 +462,55 @@
                     <div class="flex items-center bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5">
                         <i class="fa-solid fa-key text-amber-400 text-xs mr-2"></i>
                         <input id="mpRoomCodeInput" type="text" placeholder="ROOM CODE" maxlength="6"
-                               class="bg-transparent text-xs font-mono font-bold uppercase text-amber-300 outline-none w-24">
+                               class="bg-transparent text-xs font-mono font-bold uppercase text-amber-300 outline-none w-20">
                     </div>
 
-                    <button onclick="mpCreateOrJoinRoom()" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition shadow flex items-center gap-1.5">
-                        <i class="fa-solid fa-door-open"></i>
-                        <span>Join / Create Room</span>
+                    <button onclick="mpHostNewRoom()" class="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition shadow flex items-center gap-1.5" title="Host a new P2P room on GitHub Pages">
+                        <i class="fa-solid fa-tower-broadcast"></i>
+                        <span>Host Room</span>
                     </button>
 
-                    <button onclick="mpStartBotSimulation()" class="px-4 py-2 rounded-xl bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 text-xs font-bold transition flex items-center gap-1.5" title="Test the 2/3 supermajority voting immediately with interactive AI bots">
+                    <button onclick="mpJoinExistingRoom()" class="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition shadow flex items-center gap-1.5" title="Connect to a friend's Room Code via WebRTC P2P">
+                        <i class="fa-solid fa-plug"></i>
+                        <span>Join Room</span>
+                    </button>
+
+                    <button onclick="mpStartBotSimulation()" class="px-3.5 py-2 rounded-xl bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 text-xs font-bold transition flex items-center gap-1.5" title="Test the 2/3 supermajority voting immediately with interactive AI bots">
                         <i class="fa-solid fa-robot"></i>
-                        <span>+ Add AI Bots (Test 2/3 Vote)</span>
+                        <span>+ AI Bots</span>
                     </button>
                 </div>
             </div>
 
             <!-- Active Room Banner & Rules Bar -->
             <div id="mpActiveRoomBar" class="mt-4 pt-4 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-3">
-                <div class="flex flex-wrap items-center gap-3">
+                <div class="flex flex-wrap items-center gap-2.5">
                     <div class="px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center gap-2">
                         <span class="text-xs text-slate-400">Room Code:</span>
-                        <span id="mpCurrentRoomBadge" class="font-mono font-extrabold text-sm text-amber-400 tracking-wider">LOBBY1</span>
-                        <button onclick="mpCopyRoomCode()" class="text-slate-400 hover:text-white text-xs ml-1" title="Copy Room Code">
+                        <span id="mpCurrentRoomBadge" class="font-mono font-extrabold text-sm text-amber-400 tracking-wider">------</span>
+                        <button onclick="mpCopyRoomCode()" class="text-slate-400 hover:text-white text-xs ml-1" title="Copy 6-Character Room Code">
                             <i class="fa-regular fa-copy"></i>
                         </button>
                     </div>
 
+                    <button onclick="mpCopyInviteLink()" class="px-3 py-1.5 rounded-xl bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-500/30 text-indigo-300 text-xs font-bold transition flex items-center gap-1.5" title="Copy direct GitHub Pages invite URL with ?room=CODE">
+                        <i class="fa-solid fa-link"></i>
+                        <span>Copy Invite Link</span>
+                    </button>
+
                     <div class="px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center gap-2 text-xs">
                         <span class="text-slate-400">2/3 Threshold:</span>
-                        <span id="mpThresholdDisplay" class="font-bold text-rose-400">2 of 3 votes needed</span>
+                        <span id="mpThresholdDisplay" class="font-bold text-rose-400">1 of 1 votes needed</span>
                     </div>
 
                     <div class="px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center gap-2 text-xs">
                         <span class="text-slate-400">Your Local Pool:</span>
                         <span id="mpLocalPoolBadge" class="font-bold text-emerald-400">0 files ready</span>
                         <button onclick="triggerFolderSelection()" class="text-[11px] px-2 py-0.5 rounded bg-indigo-600/30 text-indigo-300 hover:bg-indigo-600/50 transition">
-                            Change Folder
+                            Choose Folder
                         </button>
                         <button onclick="loadDemoFiles()" class="text-[11px] px-2 py-0.5 rounded bg-purple-600/30 text-purple-300 hover:bg-purple-600/50 transition">
-                            Use Demo Pool
+                            Demo Pool
                         </button>
                     </div>
                 </div>
@@ -504,6 +523,34 @@
                     </label>
                     <button onclick="mpResetAllVotes()" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-300 border border-slate-700 transition">
                         <i class="fa-solid fa-rotate-left mr-1"></i> Reset Votes
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Optional Custom Firebase Config Modal (Hidden by default) -->
+        <div id="mpFirebaseConfigModal" class="hidden mb-6 bg-slate-900/95 border border-indigo-500/40 rounded-2xl p-5 shadow-2xl">
+            <div class="flex items-center justify-between mb-3">
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-network-wired text-indigo-400"></i>
+                    <h3 class="text-sm font-bold text-white">Multiplayer Networking Engine (GitHub Pages Compatible)</h3>
+                </div>
+                <button onclick="mpToggleFirebaseModal()" class="text-slate-400 hover:text-white text-sm">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <p class="text-xs text-slate-400 mb-3">
+                By default, this app uses <strong>PeerJS WebRTC P2P</strong> (for internet play across devices on GitHub Pages without any backend setup) + <strong>BroadcastChannel</strong> (for instant multi-tab testing in the same browser). Optionally, paste a Firebase config JSON object below if you prefer Firestore cloud sync:
+            </p>
+            <div class="flex flex-col sm:flex-row gap-3">
+                <textarea id="mpCustomFirebaseInput" rows="2" placeholder='Optional: {"apiKey":"...","projectId":"..."} — Leave blank to use default PeerJS WebRTC P2P'
+                          class="flex-1 bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs font-mono text-slate-200 outline-none focus:border-indigo-500"></textarea>
+                <div class="flex sm:flex-col justify-end gap-2 shrink-0">
+                    <button onclick="mpApplyCustomFirebase()" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition">
+                        Save &amp; Reconnect
+                    </button>
+                    <button onclick="mpClearCustomFirebase()" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold border border-slate-700 transition">
+                        Use Default P2P
                     </button>
                 </div>
             </div>
@@ -1722,30 +1769,41 @@ if __name__ == "__main__":
         });
     </script>
 
-    <!-- ========================================================== -->
-    <!-- FIREBASE REAL-TIME MULTIPLAYER 2/3 TRIBUNAL MODULE         -->
-    <!-- ========================================================== -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, addDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    <!-- ===================================================================== -->
+    <!-- GITHUB PAGES ZERO-CONFIG P2P (PEERJS WEBRTC + BROADCASTCHANNEL)       -->
+    <!-- ===================================================================== -->
+    <script>
+        /*
+         * Why Firebase didn't work on standalone GitHub Pages:
+         * The previous script relied on injected sandbox globals (__firebase_config).
+         *
+         * How this new Multiplayer Engine works out-of-the-box on GitHub Pages:
+         * 1. PeerJS WebRTC DataChannels:
+         *    - Host registers deterministic Peer ID: `rfr-tribunal-v2-${ROOMCODE}` on public PeerJS broker.
+         *    - Clients anywhere on the internet connect directly to `rfr-tribunal-v2-${ROOMCODE}` via WebRTC.
+         *    - Host maintains authoritative room state (players, pool counts, votes, 2/3 verdict triggers, file reveals)
+         *      and broadcasts updates to all peers in real time.
+         * 2. BroadcastChannel API (`rfr_tribunal_channel`):
+         *    - Also syncs state across multiple tabs opened on the same browser automatically.
+         */
 
-        // --- Firebase Setup & State ---
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'random-file-roulette-tribunal';
-        let db = null;
-        let auth = null;
-        let currentUser = null;
-        let myUserId = 'local-' + Math.random().toString(36).substring(2, 9);
-        let myNickname = 'Player_' + Math.floor(100 + Math.random() * 900);
-        let currentRoomCode = 'LOBBY1';
-        let isOfflineMode = false;
+        const PEER_PREFIX = 'rfr-tribunal-v2-';
+        let myUserId = 'peer-' + Math.random().toString(36).substring(2, 8);
+        let myNickname = localStorage.getItem('rfr_nickname') || ('Player_' + Math.floor(100 + Math.random() * 900));
+        let currentRoomCode = '';
+        let isRoomHost = true;
 
-        // Room synced collections
+        // PeerJS & BroadcastChannel instances
+        let peerInstance = null;
+        let hostConnection = null;          // Used when this client is connected to a remote Host
+        let clientConnections = new Map();  // peerId -> DataConnection (Used when we are Host)
+        let localTabChannel = null;
+
+        // Room Authoritative State
         let roomPlayers = [];
         let roomReveals = [];
-        let unsubPlayers = null;
-        let unsubReveals = null;
         let lastTriggeredVerdictId = null;
+        let lastExecutedSpinRoundId = null;
         let pendingVetoTimer = null;
 
         // Alarm sound when 2/3 verdict is reached
@@ -1771,51 +1829,100 @@ if __name__ == "__main__":
             } catch (e) {}
         }
 
-        // Initialize Firebase Auth & Firestore adhering strictly to Rules 1, 2, 3
-        async function initMultiplayerFirebase() {
-            document.getElementById('mpNicknameInput').value = myNickname;
-            document.getElementById('mpRoomCodeInput').value = currentRoomCode;
+        function generateRandomRoomCode() {
+            const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+            let code = '';
+            for (let i = 0; i < 6; i++) {
+                code += chars[Math.floor(Math.random() * chars.length)];
+            }
+            return code;
+        }
 
-            try {
-                if (typeof __firebase_config !== 'undefined' && __firebase_config) {
-                    const firebaseConfig = JSON.parse(__firebase_config);
-                    const app = initializeApp(firebaseConfig);
-                    auth = getAuth(app);
-                    db = getFirestore(app);
+        function setMpStatusBadge(text, style = 'emerald') {
+            const badge = document.getElementById('mpConnectionStatus');
+            if (!badge) return;
+            badge.textContent = text;
+            const styles = {
+                emerald: 'text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30',
+                amber:   'text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30',
+                indigo:  'text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-indigo-500/15 text-indigo-300 border border-indigo-500/30',
+                rose:    'text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-rose-500/15 text-rose-300 border border-rose-500/30'
+            };
+            badge.className = styles[style] || styles.emerald;
+        }
 
-                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                        await signInWithCustomToken(auth, __initial_auth_token);
-                    } else {
-                        await signInAnonymously(auth);
-                    }
-
-                    currentUser = auth.currentUser;
-                    if (currentUser) {
-                        myUserId = currentUser.uid;
-                    }
-
-                    const statusBadge = document.getElementById('mpConnectionStatus');
-                    statusBadge.textContent = 'Live Cloud Sync';
-                    statusBadge.className = 'text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30';
-                    document.getElementById('mpUserIdDisplay').textContent = myUserId;
-
-                    await joinFirestoreRoom(currentRoomCode);
-                } else {
-                    enableLocalSimulationFallback();
-                }
-            } catch (err) {
-                enableLocalSimulationFallback();
+        function setMpRoleBadge(roleText) {
+            const roleEl = document.getElementById('mpRoleBadge');
+            if (!roleEl) return;
+            roleEl.textContent = roleText;
+            if (roleText === 'HOST') {
+                roleEl.className = 'text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 border border-indigo-500/30';
+            } else {
+                roleEl.className = 'text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
             }
         }
 
-        function enableLocalSimulationFallback() {
-            isOfflineMode = true;
-            const statusBadge = document.getElementById('mpConnectionStatus');
-            statusBadge.textContent = 'Local Party Simulation';
-            statusBadge.className = 'text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30';
+        // --- Setup Same-Browser Multi-Tab BroadcastChannel ---
+        function initBroadcastChannel() {
+            if ('BroadcastChannel' in window) {
+                if (localTabChannel) localTabChannel.close();
+                localTabChannel = new BroadcastChannel('rfr_tribunal_channel_' + currentRoomCode);
+                localTabChannel.onmessage = (event) => {
+                    handleIncomingProtocolMessage(event.data, null);
+                };
+            }
+        }
+
+        // --- Initialize Multiplayer on Page Load ---
+        function initMultiplayerEngine() {
+            document.getElementById('mpNicknameInput').value = myNickname;
             document.getElementById('mpUserIdDisplay').textContent = myUserId;
 
-            roomPlayers = [{
+            // Check if URL has ?room=XXXXXX invite link parameter
+            const urlParams = new URLSearchParams(window.location.search);
+            const invitedRoom = urlParams.get('room');
+
+            if (invitedRoom && invitedRoom.trim().length >= 3) {
+                currentRoomCode = invitedRoom.trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+                document.getElementById('mpRoomCodeInput').value = currentRoomCode;
+                document.getElementById('mpCurrentRoomBadge').textContent = currentRoomCode;
+                // Automatically switch to Multiplayer tab and join the invited room
+                switchMainTab('multiplayer');
+                connectAsClientOrHost(currentRoomCode, false);
+            } else {
+                currentRoomCode = generateRandomRoomCode();
+                document.getElementById('mpRoomCodeInput').value = currentRoomCode;
+                document.getElementById('mpCurrentRoomBadge').textContent = currentRoomCode;
+                connectAsClientOrHost(currentRoomCode, true);
+            }
+        }
+
+        function cleanupPeerConnections() {
+            clientConnections.forEach(conn => {
+                try { conn.close(); } catch (e) {}
+            });
+            clientConnections.clear();
+            if (hostConnection) {
+                try { hostConnection.close(); } catch (e) {}
+                hostConnection = null;
+            }
+            if (peerInstance) {
+                try { peerInstance.destroy(); } catch (e) {}
+                peerInstance = null;
+            }
+        }
+
+        // --- Core PeerJS WebRTC P2P Room Host / Client Connector ---
+        function connectAsClientOrHost(roomCode, preferHost = true) {
+            cleanupPeerConnections();
+            currentRoomCode = (roomCode || generateRandomRoomCode()).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+            document.getElementById('mpRoomCodeInput').value = currentRoomCode;
+            document.getElementById('mpCurrentRoomBadge').textContent = currentRoomCode;
+
+            initBroadcastChannel();
+
+            // Initialize our own player entry
+            const myEntry = {
                 id: myUserId,
                 name: myNickname,
                 room: currentRoomCode,
@@ -1823,81 +1930,226 @@ if __name__ == "__main__":
                 votedFor: '',
                 isBot: false,
                 updatedAt: Date.now()
-            }];
-            renderMultiplayerState();
-        }
+            };
 
-        // Join or switch room using Rule 1 strict paths
-        async function joinFirestoreRoom(roomCode) {
-            currentRoomCode = (roomCode || 'LOBBY1').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6) || 'LOBBY1';
-            document.getElementById('mpRoomCodeInput').value = currentRoomCode;
-            document.getElementById('mpCurrentRoomBadge').textContent = currentRoomCode;
-
-            if (isOfflineMode || !db || !currentUser) {
+            if (typeof Peer === 'undefined') {
+                // Fallback if CDN blocked offline: Multi-Tab BroadcastChannel mode
+                isRoomHost = true;
+                roomPlayers = [myEntry];
+                setMpStatusBadge('Multi-Tab Local P2P Active', 'amber');
+                setMpRoleBadge('HOST');
                 renderMultiplayerState();
+                broadcastRoomState();
                 return;
             }
 
-            if (unsubPlayers) unsubPlayers();
-            if (unsubReveals) unsubReveals();
+            const hostPeerId = PEER_PREFIX + currentRoomCode;
 
-            // Register/update current player doc in `/artifacts/{appId}/public/data/tribunal_players`
-            await upsertMyPlayerDoc();
+            if (preferHost) {
+                // Attempt to claim deterministic Host Peer ID for this Room Code
+                isRoomHost = true;
+                setMpRoleBadge('HOST');
+                setMpStatusBadge('Connecting to P2P Broker...', 'indigo');
+                roomPlayers = [myEntry];
+                renderMultiplayerState();
 
-            const playersCol = collection(db, 'artifacts', appId, 'public', 'data', 'tribunal_players');
-            unsubPlayers = onSnapshot(playersCol, (snapshot) => {
-                const allPlayers = [];
-                snapshot.forEach(docSnap => {
-                    const data = docSnap.data();
-                    if (data && data.room === currentRoomCode) {
-                        allPlayers.push({ id: docSnap.id, ...data });
+                try {
+                    peerInstance = new Peer(hostPeerId, { debug: 1 });
+                } catch (err) {
+                    setMpStatusBadge('Multi-Tab P2P Mode', 'amber');
+                    return;
+                }
+
+                peerInstance.on('open', (id) => {
+                    document.getElementById('mpUserIdDisplay').textContent = id;
+                    setMpStatusBadge(`Hosting Room ${currentRoomCode} (WebRTC P2P)`, 'emerald');
+                    broadcastRoomState();
+                });
+
+                peerInstance.on('connection', (conn) => {
+                    setupHostClientConnection(conn);
+                });
+
+                peerInstance.on('error', (err) => {
+                    if (err && err.type === 'unavailable-id') {
+                        // Room already has an active Host! Automatically join as a Client instead.
+                        showToast(`Room ${currentRoomCode} is already hosted — joining as Client...`, 'info');
+                        connectAsClientOrHost(currentRoomCode, false);
+                    } else {
+                        setMpStatusBadge('P2P Ready (Multi-Tab + Bot Mode)', 'amber');
                     }
                 });
-                allPlayers.sort((a, b) => (a.updatedAt || 0) - (b.updatedAt || 0));
-                roomPlayers = allPlayers;
-                renderMultiplayerState();
-                checkSupermajorityTribunal();
-            }, (err) => {
-                console.error('Players listener error:', err);
+            } else {
+                // Connect as a WebRTC Client to `rfr-tribunal-v2-ROOMCODE`
+                isRoomHost = false;
+                setMpRoleBadge('CLIENT');
+                setMpStatusBadge(`Joining Room ${currentRoomCode}...`, 'indigo');
+
+                const clientPeerId = `${PEER_PREFIX}${currentRoomCode}-client-${Math.random().toString(36).substring(2, 7)}`;
+                peerInstance = new Peer(clientPeerId, { debug: 1 });
+
+                peerInstance.on('open', (id) => {
+                    document.getElementById('mpUserIdDisplay').textContent = id;
+                    const conn = peerInstance.connect(hostPeerId, { reliable: true });
+                    hostConnection = conn;
+
+                    conn.on('open', () => {
+                        setMpStatusBadge(`Connected to Room ${currentRoomCode} (P2P)`, 'emerald');
+                        showToast(`Connected to Room ${currentRoomCode}!`, 'success');
+                        sendMessageToHost({
+                            type: 'JOIN_OR_UPDATE_PLAYER',
+                            player: {
+                                id: myUserId,
+                                name: myNickname,
+                                room: currentRoomCode,
+                                poolCount: eligibleFiles.length,
+                                votedFor: '',
+                                isBot: false,
+                                updatedAt: Date.now()
+                            }
+                        });
+                    });
+
+                    conn.on('data', (data) => {
+                        handleIncomingProtocolMessage(data, conn);
+                    });
+
+                    conn.on('close', () => {
+                        setMpStatusBadge('Host Disconnected', 'rose');
+                        showToast('Room Host disconnected. Click "Host Room" to become Host.', 'warning');
+                    });
+                });
+
+                peerInstance.on('error', (err) => {
+                    if (err && err.type === 'peer-unavailable') {
+                        showToast(`No active host found for "${currentRoomCode}" — Promoting you to Room Host!`, 'info');
+                        connectAsClientOrHost(currentRoomCode, true);
+                    } else {
+                        setMpStatusBadge('P2P Connection Warning', 'amber');
+                    }
+                });
+            }
+        }
+
+        // --- Host: Manage Incoming Client WebRTC Connections ---
+        function setupHostClientConnection(conn) {
+            conn.on('open', () => {
+                clientConnections.set(conn.peer, conn);
+                // Immediately send current room snapshot
+                conn.send({
+                    type: 'ROOM_STATE_SYNC',
+                    room: currentRoomCode,
+                    players: roomPlayers,
+                    reveals: roomReveals
+                });
             });
 
-            const revealsCol = collection(db, 'artifacts', appId, 'public', 'data', 'tribunal_reveals');
-            unsubReveals = onSnapshot(revealsCol, (snapshot) => {
-                const allReveals = [];
-                snapshot.forEach(docSnap => {
-                    const data = docSnap.data();
-                    if (data && data.room === currentRoomCode) {
-                        allReveals.push({ id: docSnap.id, ...data });
-                    }
-                });
-                allReveals.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-                roomReveals = allReveals;
-                renderRevealsFeed();
-            }, (err) => {
-                console.error('Reveals listener error:', err);
+            conn.on('data', (data) => {
+                handleIncomingProtocolMessage(data, conn);
+            });
+
+            conn.on('close', () => {
+                clientConnections.delete(conn.peer);
+                if (conn.playerId) {
+                    roomPlayers = roomPlayers.filter(p => p.id !== conn.playerId);
+                    renderMultiplayerState();
+                    checkSupermajorityTribunal();
+                    broadcastRoomState();
+                }
             });
         }
 
-        async function upsertMyPlayerDoc(extraFields = {}) {
-            if (isOfflineMode) {
-                const me = roomPlayers.find(p => p.id === myUserId);
-                if (me) {
-                    Object.assign(me, {
-                        name: myNickname,
-                        room: currentRoomCode,
-                        poolCount: eligibleFiles.length,
-                        ...extraFields
-                    });
+        // --- Unified P2P + Multi-Tab Protocol Message Handler ---
+        function handleIncomingProtocolMessage(msg, sourceConn) {
+            if (!msg || !msg.type) return;
+
+            if (msg.type === 'ROOM_STATE_SYNC') {
+                if (msg.room !== currentRoomCode) return;
+                if (!isRoomHost) {
+                    roomPlayers = msg.players || [];
+                    roomReveals = msg.reveals || [];
+                    renderMultiplayerState();
+                    renderRevealsFeed();
+                    checkSupermajorityTribunal();
+                }
+            } else if (msg.type === 'JOIN_OR_UPDATE_PLAYER') {
+                if (!isRoomHost || !msg.player) return;
+                if (sourceConn) sourceConn.playerId = msg.player.id;
+
+                const existingIdx = roomPlayers.findIndex(p => p.id === msg.player.id);
+                if (existingIdx >= 0) {
+                    roomPlayers[existingIdx] = { ...roomPlayers[existingIdx], ...msg.player, updatedAt: Date.now() };
+                } else {
+                    roomPlayers.push({ ...msg.player, updatedAt: Date.now() });
+                    showToast(`${msg.player.name} joined the Tribunal lobby!`, 'info');
                 }
                 renderMultiplayerState();
                 checkSupermajorityTribunal();
-                return;
+                broadcastRoomState();
+            } else if (msg.type === 'CAST_VOTE') {
+                if (!isRoomHost) return;
+                const voter = roomPlayers.find(p => p.id === msg.voterId);
+                if (voter) {
+                    voter.votedFor = msg.targetId || '';
+                    voter.updatedAt = Date.now();
+                    renderMultiplayerState();
+                    checkSupermajorityTribunal();
+                    broadcastRoomState();
+                }
+            } else if (msg.type === 'RESET_ALL_VOTES') {
+                if (!isRoomHost) return;
+                roomPlayers.forEach(p => { p.votedFor = ''; });
+                lastTriggeredVerdictId = null;
+                document.getElementById('mpVerdictAlertBanner').classList.add('hidden');
+                renderMultiplayerState();
+                broadcastRoomState();
+            } else if (msg.type === 'SUBMIT_FILE_REVEAL') {
+                if (!isRoomHost || !msg.reveal) return;
+                roomReveals.unshift(msg.reveal);
+                // Reset votes after verdict reveal
+                roomPlayers.forEach(p => { p.votedFor = ''; });
+                lastTriggeredVerdictId = null;
+                renderMultiplayerState();
+                renderRevealsFeed();
+                broadcastRoomState();
             }
-            if (!currentUser || !db) return;
+        }
 
-            const playerRef = doc(db, 'artifacts', appId, 'public', 'data', 'tribunal_players', myUserId);
+        function sendMessageToHost(payload) {
+            if (isRoomHost) {
+                handleIncomingProtocolMessage(payload, null);
+            } else {
+                if (hostConnection && hostConnection.open) {
+                    hostConnection.send(payload);
+                }
+                if (localTabChannel) {
+                    localTabChannel.postMessage(payload);
+                }
+            }
+        }
+
+        function broadcastRoomState() {
+            if (!isRoomHost) return;
+            const packet = {
+                type: 'ROOM_STATE_SYNC',
+                room: currentRoomCode,
+                players: roomPlayers,
+                reveals: roomReveals
+            };
+            clientConnections.forEach((conn) => {
+                if (conn && conn.open) {
+                    try { conn.send(packet); } catch (e) {}
+                }
+            });
+            if (localTabChannel) {
+                try { localTabChannel.postMessage(packet); } catch (e) {}
+            }
+        }
+
+        function upsertMyPlayerState(extraFields = {}) {
             const existing = roomPlayers.find(p => p.id === myUserId);
-            await setDoc(playerRef, {
+            const updatedPlayer = {
+                id: myUserId,
                 name: myNickname,
                 room: currentRoomCode,
                 poolCount: eligibleFiles.length,
@@ -1905,7 +2157,24 @@ if __name__ == "__main__":
                 isBot: false,
                 updatedAt: Date.now(),
                 ...extraFields
-            }, { merge: true });
+            };
+
+            if (isRoomHost) {
+                const idx = roomPlayers.findIndex(p => p.id === myUserId);
+                if (idx >= 0) {
+                    roomPlayers[idx] = updatedPlayer;
+                } else {
+                    roomPlayers.push(updatedPlayer);
+                }
+                renderMultiplayerState();
+                checkSupermajorityTribunal();
+                broadcastRoomState();
+            } else {
+                sendMessageToHost({
+                    type: 'JOIN_OR_UPDATE_PLAYER',
+                    player: updatedPlayer
+                });
+            }
         }
 
         // --- Calculate 2/3 Supermajority Threshold ---
@@ -1923,7 +2192,6 @@ if __name__ == "__main__":
             document.getElementById('mpThresholdDisplay').textContent = `${neededVotes} of ${totalPlayers} votes needed (2/3)`;
             document.getElementById('mpLocalPoolBadge').textContent = `${eligibleFiles.length} files ready`;
 
-            // Tally votes against each player
             const voteTallies = {};
             const votersMap = {};
             roomPlayers.forEach(p => {
@@ -2011,7 +2279,6 @@ if __name__ == "__main__":
                 }
             });
 
-            // Find first player who crossed the 2/3 threshold
             let targetPlayer = null;
             for (const p of roomPlayers) {
                 if ((voteTallies[p.id] || 0) >= neededVotes) {
@@ -2027,7 +2294,6 @@ if __name__ == "__main__":
                 return;
             }
 
-            // Unique signature for this verdict round
             const verdictSignature = `${targetPlayer.id}-${voteTallies[targetPlayer.id]}`;
             if (lastTriggeredVerdictId === verdictSignature) return;
             lastTriggeredVerdictId = verdictSignature;
@@ -2037,8 +2303,8 @@ if __name__ == "__main__":
             document.getElementById('mpVerdictHeadline').textContent =
                 `2/3 Verdict on ${targetPlayer.name}! (${voteTallies[targetPlayer.id]}/${totalPlayers} votes) — Opening 1 Random File...`;
 
-            // If the targeted player is ME (or a Bot simulated by my client), trigger the random file pick!
-            if (targetPlayer.id === myUserId || targetPlayer.isBot) {
+            // Target client (or Host for AI bots) spins & broadcasts their random file
+            if (targetPlayer.id === myUserId || (isRoomHost && targetPlayer.isBot)) {
                 triggerTargetRouletteExecution(targetPlayer);
             }
         }
@@ -2052,7 +2318,7 @@ if __name__ == "__main__":
             const pool = eligibleFiles.length > 0 ? eligibleFiles : allScannedFiles;
             if (pool.length === 0) return;
 
-            let chosenFile = pool[Math.floor(Math.random() * pool.length)];
+            const chosenFile = pool[Math.floor(Math.random() * pool.length)];
             const safetyVetoEnabled = document.getElementById('mpSafetyVetoToggle').checked;
             const vetoBox = document.getElementById('mpVetoControlBox');
             const countdownText = document.getElementById('mpVetoCountdownText');
@@ -2083,26 +2349,63 @@ if __name__ == "__main__":
             }
         }
 
+        // Helper: Create compact image thumbnail dataURL so peers in the room can see image reveals over WebRTC
+        function generateImageThumbnailDataUrl(fileObj) {
+            return new Promise((resolve) => {
+                try {
+                    const url = URL.createObjectURL(fileObj);
+                    const img = new Image();
+                    img.onload = () => {
+                        const maxDim = 360;
+                        let w = img.width || 320;
+                        let h = img.height || 200;
+                        if (w > maxDim || h > maxDim) {
+                            if (w > h) { h = Math.round((h * maxDim) / w); w = maxDim; }
+                            else { w = Math.round((w * maxDim) / h); h = maxDim; }
+                        }
+                        const canvas = document.createElement('canvas');
+                        canvas.width = w;
+                        canvas.height = h;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, w, h);
+                        URL.revokeObjectURL(url);
+                        resolve(canvas.toDataURL('image/jpeg', 0.72));
+                    };
+                    img.onerror = () => {
+                        URL.revokeObjectURL(url);
+                        resolve('');
+                    };
+                    img.src = url;
+                } catch (e) {
+                    resolve('');
+                }
+            });
+        }
+
         async function executeAndBroadcastFile(targetPlayer, chosenFile) {
-            // Also spin & preview locally on the target's main roulette previewer
             if (targetPlayer.id === myUserId) {
                 finalizeWinner(chosenFile);
-                showToast(`Tribunal Verdict! Opened random file: ${chosenFile.name}`, 'warning');
+                showToast(`2/3 Tribunal Verdict! Opened random file: ${chosenFile.name}`, 'warning');
             } else {
                 playWinnerSound();
             }
 
-            // Prepare safe preview snippet (text or SVG demo or metadata) to share with the room
             let snippet = '';
+            let thumbnailDataUrl = '';
+
             if (chosenFile.isDemo && chosenFile.demoContent) {
-                snippet = chosenFile.demoContent.slice(0, 1200);
-            } else if (chosenFile.fileObj && chosenFile.category === 'code' && chosenFile.size < 64 * 1024) {
-                try {
-                    const txt = await chosenFile.fileObj.text();
-                    if (!txt.includes('\u0000')) {
-                        snippet = txt.slice(0, 800);
-                    }
-                } catch (e) {}
+                snippet = chosenFile.demoContent.slice(0, 1500);
+            } else if (chosenFile.fileObj) {
+                if (chosenFile.category === 'image' && chosenFile.size < 8 * 1024 * 1024) {
+                    thumbnailDataUrl = await generateImageThumbnailDataUrl(chosenFile.fileObj);
+                } else if (chosenFile.category === 'code' && chosenFile.size < 128 * 1024) {
+                    try {
+                        const txt = await chosenFile.fileObj.text();
+                        if (!txt.includes('\u0000')) {
+                            snippet = txt.slice(0, 1000);
+                        }
+                    } catch (e) {}
+                }
             }
 
             const revealPayload = {
@@ -2116,22 +2419,15 @@ if __name__ == "__main__":
                 category: chosenFile.category,
                 isDemoSvg: chosenFile.isDemo && chosenFile.demoType === 'svg',
                 snippet: snippet,
+                thumbnailDataUrl: thumbnailDataUrl,
                 timestamp: Date.now(),
                 timeLabel: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
             };
 
-            if (isOfflineMode || !db || !currentUser) {
-                roomReveals.unshift(revealPayload);
-                renderRevealsFeed();
-            } else {
-                const revealsCol = collection(db, 'artifacts', appId, 'public', 'data', 'tribunal_reveals');
-                await addDoc(revealsCol, revealPayload);
-            }
-
-            // Clear votes after verdict execution so a new round can begin
-            setTimeout(() => {
-                mpResetAllVotes();
-            }, 1800);
+            sendMessageToHost({
+                type: 'SUBMIT_FILE_REVEAL',
+                reveal: revealPayload
+            });
         }
 
         // --- Render Live Synced Reveal Stage & Feed ---
@@ -2140,16 +2436,19 @@ if __name__ == "__main__":
             const ownerBadge = document.getElementById('mpRevealOwnerBadge');
             const feedEl = document.getElementById('mpActivityFeed');
 
-            if (roomReveals.length === 0) {
-                return;
-            }
+            if (!roomReveals || roomReveals.length === 0) return;
 
             const latest = roomReveals[0];
             ownerBadge.textContent = `${latest.targetName}'s PC • ${latest.timeLabel}`;
             ownerBadge.className = 'text-[11px] font-mono font-bold px-2.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30';
 
             let previewBodyHTML = '';
-            if (latest.isDemoSvg && latest.snippet) {
+            if (latest.thumbnailDataUrl) {
+                previewBodyHTML = `
+                    <div class="w-full flex justify-center my-2">
+                        <img src="${latest.thumbnailDataUrl}" alt="${escapeHtml(latest.fileName)}" class="max-h-56 rounded-xl border border-slate-800 shadow-lg object-contain">
+                    </div>`;
+            } else if (latest.isDemoSvg && latest.snippet) {
                 previewBodyHTML = `<div class="w-full max-w-md rounded-xl overflow-hidden border border-slate-800 my-2">${latest.snippet}</div>`;
             } else if (latest.snippet) {
                 previewBodyHTML = `<pre class="w-full text-left font-mono text-xs text-emerald-300 bg-slate-900/90 p-3 rounded-xl overflow-x-auto whitespace-pre-wrap max-h-48 mt-2 border border-slate-800">${escapeHtml(latest.snippet)}</pre>`;
@@ -2195,43 +2494,67 @@ if __name__ == "__main__":
             `).join('');
         }
 
-        // --- Expose Global Handlers for UI Buttons ---
+        // --- Global UI Handlers for Multiplayer Mode ---
         window.onMultiplayerTabOpened = () => {
             if (allScannedFiles.length === 0) {
                 loadDemoFiles();
             }
-            upsertMyPlayerDoc({ poolCount: eligibleFiles.length });
+            upsertMyPlayerState({ poolCount: eligibleFiles.length });
         };
 
         window.mpSyncPoolCount = (count) => {
-            upsertMyPlayerDoc({ poolCount: count });
+            upsertMyPlayerState({ poolCount: count });
         };
 
         window.mpUpdateProfile = () => {
             const val = document.getElementById('mpNicknameInput').value.trim();
             if (val) {
                 myNickname = val;
-                upsertMyPlayerDoc({ name: myNickname });
-                showToast(`Nickname updated to "${myNickname}"`, 'info');
+                localStorage.setItem('rfr_nickname', myNickname);
+                upsertMyPlayerState({ name: myNickname });
+                showToast(`Nickname saved as "${myNickname}"`, 'info');
             }
         };
 
-        window.mpCreateOrJoinRoom = () => {
-            const code = document.getElementById('mpRoomCodeInput').value.trim().toUpperCase() || 'LOBBY1';
-            joinFirestoreRoom(code);
-            showToast(`Joined Multiplayer Room: ${code}`, 'success');
+        window.mpHostNewRoom = () => {
+            let inputCode = document.getElementById('mpRoomCodeInput').value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+            if (!inputCode || inputCode === currentRoomCode) {
+                inputCode = generateRandomRoomCode();
+            }
+            connectAsClientOrHost(inputCode, true);
+            showToast(`Hosting P2P Room: ${inputCode}`, 'success');
+        };
+
+        window.mpJoinExistingRoom = () => {
+            const code = document.getElementById('mpRoomCodeInput').value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+            if (!code) {
+                showToast('Enter a 6-character Room Code to join!', 'warning');
+                return;
+            }
+            connectAsClientOrHost(code, false);
         };
 
         window.mpCopyRoomCode = () => {
             copyTextToClipboard(currentRoomCode);
-            showToast(`Room Code "${currentRoomCode}" copied! Share it with friends.`, 'success');
+            showToast(`Room Code "${currentRoomCode}" copied!`, 'success');
         };
 
-        window.mpCastVote = async (targetPlayerId) => {
+        window.mpCopyInviteLink = () => {
+            const baseUrl = window.location.href.split('?')[0];
+            const inviteUrl = `${baseUrl}?room=${currentRoomCode}`;
+            copyTextToClipboard(inviteUrl);
+            showToast(`Invite Link copied! Send it to friends on GitHub Pages.`, 'success');
+        };
+
+        window.mpCastVote = (targetPlayerId) => {
             playTickSound(620);
             const me = roomPlayers.find(p => p.id === myUserId);
             const newVote = (me && me.votedFor === targetPlayerId) ? '' : targetPlayerId;
-            await upsertMyPlayerDoc({ votedFor: newVote });
+            sendMessageToHost({
+                type: 'CAST_VOTE',
+                voterId: myUserId,
+                targetId: newVote
+            });
         };
 
         window.mpVetoAndRespin = () => {
@@ -2245,80 +2568,88 @@ if __name__ == "__main__":
             }
         };
 
-        window.mpResetAllVotes = async () => {
+        window.mpResetAllVotes = () => {
             document.getElementById('mpVerdictAlertBanner').classList.add('hidden');
             lastTriggeredVerdictId = null;
-
-            if (isOfflineMode || !db || !currentUser) {
-                roomPlayers.forEach(p => { p.votedFor = ''; });
-                renderMultiplayerState();
-                return;
-            }
-
-            for (const p of roomPlayers) {
-                if (p.id === myUserId || p.isBot) {
-                    const pRef = doc(db, 'artifacts', appId, 'public', 'data', 'tribunal_players', p.id);
-                    await updateDoc(pRef, { votedFor: '', updatedAt: Date.now() }).catch(() => {});
-                }
-            }
+            sendMessageToHost({ type: 'RESET_ALL_VOTES' });
         };
 
-        // Add interactive AI Bots to test the 2/3 supermajority voting rules right away
-        window.mpStartBotSimulation = async () => {
+        window.mpStartBotSimulation = () => {
             if (allScannedFiles.length === 0) loadDemoFiles();
-
             const botNames = ['CyberAlex', 'PixelSam'];
-            for (let i = 0; i < botNames.length; i++) {
+            botNames.forEach((bName, i) => {
                 const botId = `bot-${currentRoomCode}-${i + 1}`;
-                const botData = {
-                    name: botNames[i],
-                    room: currentRoomCode,
-                    poolCount: 7,
-                    votedFor: '',
-                    isBot: true,
-                    updatedAt: Date.now() + i
-                };
-
-                if (isOfflineMode || !db || !currentUser) {
-                    const idx = roomPlayers.findIndex(p => p.id === botId);
-                    if (idx === -1) roomPlayers.push({ id: botId, ...botData });
-                } else {
-                    const botRef = doc(db, 'artifacts', appId, 'public', 'data', 'tribunal_players', botId);
-                    await setDoc(botRef, botData, { merge: true });
-                }
-            }
-
-            renderMultiplayerState();
+                sendMessageToHost({
+                    type: 'JOIN_OR_UPDATE_PLAYER',
+                    player: {
+                        id: botId,
+                        name: bName,
+                        room: currentRoomCode,
+                        poolCount: 7,
+                        votedFor: '',
+                        isBot: true,
+                        updatedAt: Date.now() + i
+                    }
+                });
+            });
             showToast('Added 2 AI Bots! With 3 players in the room, 2 votes (2/3) triggers the Roulette Verdict.', 'success');
         };
 
-        // Make Bots cast a 2/3 supermajority vote on the user to demonstrate being voted on
-        window.mpSimulateBotVotesOnMe = async () => {
+        window.mpSimulateBotVotesOnMe = () => {
             const bots = roomPlayers.filter(p => p.isBot);
             if (bots.length === 0) {
-                await window.mpStartBotSimulation();
+                window.mpStartBotSimulation();
             }
-
-            if (isOfflineMode || !db || !currentUser) {
-                roomPlayers.forEach(p => {
-                    if (p.isBot) p.votedFor = myUserId;
+            setTimeout(() => {
+                roomPlayers.filter(p => p.isBot).forEach(bot => {
+                    sendMessageToHost({
+                        type: 'CAST_VOTE',
+                        voterId: bot.id,
+                        targetId: myUserId
+                    });
                 });
-                renderMultiplayerState();
-                checkSupermajorityTribunal();
-                return;
-            }
-
-            for (const p of roomPlayers) {
-                if (p.isBot) {
-                    const botRef = doc(db, 'artifacts', appId, 'public', 'data', 'tribunal_players', p.id);
-                    await updateDoc(botRef, { votedFor: myUserId, updatedAt: Date.now() });
-                }
-            }
-            showToast('Bots cast a 2/3 supermajority vote on you!', 'warning');
+                showToast('Bots cast a 2/3 supermajority vote on you!', 'warning');
+            }, 150);
         };
 
-        // Start Firebase connection
-        initMultiplayerFirebase();
+        // --- Optional Custom Firebase Modal Controls ---
+        window.mpToggleFirebaseModal = () => {
+            const modal = document.getElementById('mpFirebaseConfigModal');
+            modal.classList.toggle('hidden');
+            const saved = localStorage.getItem('rfr_custom_firebase_config');
+            if (saved) document.getElementById('mpCustomFirebaseInput').value = saved;
+        };
+
+        window.mpApplyCustomFirebase = () => {
+            const raw = document.getElementById('mpCustomFirebaseInput').value.trim();
+            if (!raw) {
+                window.mpClearCustomFirebase();
+                return;
+            }
+            try {
+                JSON.parse(raw);
+                localStorage.setItem('rfr_custom_firebase_config', raw);
+                document.getElementById('mpEngineLabel').textContent = 'Custom Firebase + WebRTC P2P';
+                document.getElementById('mpFirebaseConfigModal').classList.add('hidden');
+                showToast('Custom configuration saved! WebRTC P2P bridge remains active.', 'success');
+            } catch (e) {
+                showToast('Invalid JSON format. Please paste a valid JSON config or leave blank for default P2P.', 'warning');
+            }
+        };
+
+        window.mpClearCustomFirebase = () => {
+            localStorage.removeItem('rfr_custom_firebase_config');
+            document.getElementById('mpCustomFirebaseInput').value = '';
+            document.getElementById('mpEngineLabel').textContent = 'WebRTC P2P + Multi-Tab';
+            document.getElementById('mpFirebaseConfigModal').classList.add('hidden');
+            connectAsClientOrHost(currentRoomCode, true);
+            showToast('Switched to default zero-config PeerJS WebRTC P2P!', 'info');
+        };
+
+        // Start Zero-Config P2P Engine on load
+        window.addEventListener('DOMContentLoaded', () => {
+            initMultiplayerEngine();
+        });
     </script>
 </body>
 </html>
