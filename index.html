@@ -151,29 +151,37 @@
 
                     <!-- Hidden standard fallback directory input -->
                     <input type="file" id="fallbackDirInput" webkitdirectory directory multiple class="hidden" onchange="handleFallbackFiles(this.files)">
+                    <!-- Additional multi-file picker for picking individual .jpg / .mp4 / media files directly -->
+                    <input type="file" id="directFilesInput" multiple accept="*/*" class="hidden" onchange="handleFallbackFiles(this.files, 'Selected Files')">
 
                     <!-- Dropzone / Primary Trigger Button -->
                     <div id="folderDropzone" 
                          onclick="triggerFolderSelection()"
+                         ondragover="handleDragOver(event)"
+                         ondragleave="handleDragLeave(event)"
+                         ondrop="handleDropFiles(event)"
                          class="group cursor-pointer border-2 border-dashed border-slate-700 hover:border-indigo-500 bg-slate-950/60 hover:bg-indigo-950/20 transition-all rounded-xl p-5 text-center">
                         <div class="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 group-hover:bg-indigo-500/20 group-hover:scale-105 transition flex items-center justify-center mx-auto mb-3">
                             <i class="fa-solid fa-folder-plus text-2xl text-indigo-400"></i>
                         </div>
                         <p class="text-sm font-semibold text-white group-hover:text-indigo-300 transition">
-                            Choose Folder from PC
+                            Choose Folder or Drag &amp; Drop Files
                         </p>
                         <p class="text-xs text-slate-400 mt-1">
-                            Scans subfolders locally in your browser (100% private)
+                            Full support for .JPG, .MP4, .PNG, .MP3, .PDF, .CSV, .JSON, Code &amp; Archives
                         </p>
                     </div>
 
-                    <!-- Alternative buttons: Modern API vs Sample Demo Mode -->
-                    <div class="grid grid-cols-2 gap-2 mt-3">
-                        <button onclick="useModernDirectoryPicker()" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700/80 text-xs font-medium text-slate-300 border border-slate-700/80 transition flex items-center justify-center gap-1.5" title="Uses HTML5 File System Access API where supported">
-                            <i class="fa-solid fa-bolt text-amber-400"></i> Modern API Picker
+                    <!-- Alternative buttons: Modern API vs Direct Files vs Sample Demo Mode -->
+                    <div class="grid grid-cols-3 gap-2 mt-3">
+                        <button onclick="useModernDirectoryPicker()" class="px-2.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700/80 text-[11px] font-medium text-slate-300 border border-slate-700/80 transition flex items-center justify-center gap-1.5" title="Uses HTML5 File System Access API where supported">
+                            <i class="fa-solid fa-bolt text-amber-400"></i> Folder API
                         </button>
-                        <button onclick="loadDemoFiles()" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700/80 text-xs font-medium text-slate-300 border border-slate-700/80 transition flex items-center justify-center gap-1.5" title="Test the roulette immediately with virtual sample files">
-                            <i class="fa-solid fa-wand-magic-sparkles text-purple-400"></i> Try Demo Folder
+                        <button onclick="document.getElementById('directFilesInput').click()" class="px-2.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700/80 text-[11px] font-medium text-slate-300 border border-slate-700/80 transition flex items-center justify-center gap-1.5" title="Select individual .jpg, .mp4, or any files directly">
+                            <i class="fa-regular fa-file-video text-pink-400"></i> Pick Files
+                        </button>
+                        <button onclick="loadDemoFiles()" class="px-2.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700/80 text-[11px] font-medium text-slate-300 border border-slate-700/80 transition flex items-center justify-center gap-1.5" title="Test the roulette immediately with real generated .JPG, .MP4/Video, .WAV, .CSV & Code files">
+                            <i class="fa-solid fa-wand-magic-sparkles text-purple-400"></i> Demo Pool
                         </button>
                     </div>
 
@@ -387,11 +395,11 @@
                     </div>
 
                     <!-- Dynamic Preview Viewport -->
-                    <div id="previewViewport" class="mt-4 min-h-[260px] max-h-[520px] overflow-auto rounded-xl bg-slate-950/90 border border-slate-800/90 flex flex-col items-center justify-center p-4">
+                    <div id="previewViewport" class="mt-4 min-h-[260px] max-h-[560px] overflow-auto rounded-xl bg-slate-950/90 border border-slate-800/90 flex flex-col items-center justify-center p-4">
                         <div class="text-center text-slate-500 py-12">
                             <i class="fa-solid fa-photo-film text-4xl mb-3 opacity-40"></i>
                             <p class="text-sm font-medium">Spin the roulette to preview your chosen file right here</p>
-                            <p class="text-xs text-slate-600 mt-1">Supports Images, Video, Audio, Source Code, Markdown, JSON, Text &amp; PDFs</p>
+                            <p class="text-xs text-slate-600 mt-1">Supports .JPG/.PNG/WebP (Zoom &amp; Rotate), .MP4/.WebM (Speed &amp; Frame Capture), Audio Spectrum, CSV Tables, JSON Trees, Markdown, HTML &amp; Hex Inspector</p>
                         </div>
                     </div>
                 </section>
@@ -770,7 +778,7 @@
     <!-- ========================================== -->
     <script>
         // --- State Management ---
-        let allScannedFiles = [];     // Array of normalized file items: { name, path, size, type, ext, category, fileObj, isDemo, demoContent }
+        let allScannedFiles = [];     // Array of normalized file items: { name, path, size, type, ext, category, fileObj, isDemo, demoContent, lastModified }
         let eligibleFiles = [];       // Filtered subset ready for roulette
         let sessionHistory = [];      // Picked files in current session
         let pickedPathsSet = new Set(); // Used when "No Repeats" is enabled
@@ -781,13 +789,18 @@
         let soundEnabled = true;
         let audioCtx = null;
 
-        // --- File Extension Dictionary ---
+        // Interactive Image & Media Preview State
+        let imgZoomLevel = 1;
+        let imgRotationDeg = 0;
+        let activeAudioVisualizerId = null;
+
+        // --- Universal File Extension & MIME Dictionary ---
         const EXT_CATEGORIES = {
-            image: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico', 'avif'],
-            video: ['mp4', 'webm', 'mkv', 'mov', 'avi', 'm4v', 'ogv'],
-            audio: ['mp3', 'wav', 'ogg', 'flac', 'm4a', 'aac', 'opus'],
-            code:  ['txt', 'md', 'json', 'js', 'jsx', 'ts', 'tsx', 'py', 'html', 'css', 'scss', 'c', 'cpp', 'h', 'java', 'rs', 'go', 'php', 'rb', 'sh', 'bat', 'ps1', 'yml', 'yaml', 'xml', 'csv', 'sql', 'ini', 'log', 'toml'],
-            docs:  ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'odt', 'rtf', 'epub']
+            image: ['jpg', 'jpeg', 'jpe', 'jfif', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico', 'avif', 'tiff', 'tif', 'heic', 'heif'],
+            video: ['mp4', 'm4v', 'webm', 'mkv', 'mov', 'avi', 'ogv', '3gp', 'flv', 'wmv', 'mpeg', 'mpg', 'ts'],
+            audio: ['mp3', 'wav', 'ogg', 'oga', 'flac', 'm4a', 'aac', 'opus', 'wma', 'aiff', 'mid', 'midi'],
+            code:  ['txt', 'md', 'markdown', 'json', 'csv', 'tsv', 'js', 'mjs', 'cjs', 'jsx', 'ts', 'tsx', 'py', 'html', 'htm', 'css', 'scss', 'less', 'c', 'cpp', 'cc', 'h', 'hpp', 'cs', 'java', 'kt', 'rs', 'go', 'php', 'rb', 'lua', 'sh', 'bash', 'zsh', 'bat', 'cmd', 'ps1', 'yml', 'yaml', 'xml', 'sql', 'ini', 'cfg', 'conf', 'log', 'toml', 'env', 'dockerfile', 'makefile'],
+            docs:  ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'odt', 'ods', 'odp', 'rtf', 'epub']
         };
 
         const IGNORED_DIRS = ['node_modules', '.git', '.svn', '.hg', '__pycache__', '.next', 'dist', 'build', '.venv', 'venv', '.idea', '.vscode'];
@@ -891,17 +904,33 @@
             }
         }
 
-        // --- Helper: Categorize File by Extension ---
+        // --- Helper: Categorize File by Extension AND MIME Type ---
         function getFileExtension(filename) {
-            const parts = filename.split('.');
-            if (parts.length <= 1) return '';
-            return parts.pop().toLowerCase();
+            if (!filename) return '';
+            const cleanName = filename.trim();
+            const lastDot = cleanName.lastIndexOf('.');
+            if (lastDot <= 0 || lastDot === cleanName.length - 1) return '';
+            return cleanName.slice(lastDot + 1).toLowerCase();
         }
 
-        function categorizeExtension(ext) {
+        function categorizeFile(ext, mimeType = '') {
+            const cleanExt = (ext || '').toLowerCase();
+            const cleanMime = (mimeType || '').toLowerCase();
+
+            // 1. Check extension dictionary first
             for (const [category, list] of Object.entries(EXT_CATEGORIES)) {
-                if (list.includes(ext)) return category;
+                if (list.includes(cleanExt)) return category;
             }
+
+            // 2. Fallback to browser MIME type inspection (handles files with unusual or uppercase/missing extensions)
+            if (cleanMime.startsWith('image/')) return 'image';
+            if (cleanMime.startsWith('video/')) return 'video';
+            if (cleanMime.startsWith('audio/')) return 'audio';
+            if (cleanMime === 'application/pdf') return 'docs';
+            if (cleanMime.startsWith('text/') || cleanMime.includes('json') || cleanMime.includes('javascript') || cleanMime.includes('xml') || cleanMime.includes('csv')) {
+                return 'code';
+            }
+
             return 'other';
         }
 
@@ -912,21 +941,105 @@
                 case 'audio': return '<i class="fa-solid fa-music text-amber-400"></i>';
                 case 'code':  return '<i class="fa-solid fa-code text-emerald-400"></i>';
                 case 'docs':  return '<i class="fa-regular fa-file-pdf text-rose-400"></i>';
-                default:      return '<i class="fa-regular fa-file text-sky-400"></i>';
+                default:      return '<i class="fa-regular fa-file-zipper text-sky-400"></i>';
             }
         }
 
         function formatBytes(bytes) {
-            if (bytes === 0) return '0 B';
+            if (!bytes || bytes === 0) return '0 B';
             const k = 1024;
             const sizes = ['B', 'KB', 'MB', 'GB'];
             const i = Math.floor(Math.log(bytes) / Math.log(k));
             return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
         }
 
+        // --- Drag & Drop Support for Folders and Files (.jpg, .mp4, etc.) ---
+        function handleDragOver(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            document.getElementById('folderDropzone').classList.add('border-indigo-400', 'bg-indigo-950/30');
+        }
+
+        function handleDragLeave(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            document.getElementById('folderDropzone').classList.remove('border-indigo-400', 'bg-indigo-950/30');
+        }
+
+        async function handleDropFiles(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            document.getElementById('folderDropzone').classList.remove('border-indigo-400', 'bg-indigo-950/30');
+
+            const items = e.dataTransfer.items;
+            if (items && items.length > 0 && items[0].webkitGetAsEntry) {
+                const collected = [];
+                const entries = [];
+                for (let i = 0; i < items.length; i++) {
+                    const entry = items[i].webkitGetAsEntry();
+                    if (entry) entries.push(entry);
+                }
+                for (const entry of entries) {
+                    await traverseWebkitEntry(entry, '', collected);
+                }
+                if (collected.length > 0) {
+                    processNormalizedFiles(collected, entries.length === 1 ? entries[0].name : 'Dropped Files');
+                    return;
+                }
+            }
+
+            if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                handleFallbackFiles(e.dataTransfer.files, 'Dropped Files');
+            }
+        }
+
+        function traverseWebkitEntry(entry, parentPath, results) {
+            return new Promise((resolve) => {
+                const currentPath = parentPath ? `${parentPath}/${entry.name}` : entry.name;
+                if (entry.isFile) {
+                    entry.file((file) => {
+                        const ext = getFileExtension(file.name);
+                        results.push({
+                            name: file.name,
+                            path: currentPath,
+                            size: file.size,
+                            type: file.type || '',
+                            lastModified: file.lastModified || Date.now(),
+                            ext: ext,
+                            category: categorizeFile(ext, file.type),
+                            fileObj: file,
+                            isDemo: false
+                        });
+                        resolve();
+                    }, () => resolve());
+                } else if (entry.isDirectory) {
+                    const skipDev = document.getElementById('excludeDevDirsToggle').checked;
+                    if (skipDev && IGNORED_DIRS.includes(entry.name)) {
+                        resolve();
+                        return;
+                    }
+                    const reader = entry.createReader();
+                    const readBatch = () => {
+                        reader.readEntries(async (entries) => {
+                            if (!entries || entries.length === 0) {
+                                resolve();
+                            } else {
+                                for (const child of entries) {
+                                    await traverseWebkitEntry(child, currentPath, results);
+                                }
+                                readBatch();
+                            }
+                        }, () => resolve());
+                    };
+                    readBatch();
+                } else {
+                    resolve();
+                }
+            });
+        }
+
         // --- Folder Selection Methods ---
         function triggerFolderSelection() {
-            // Default to standard input webkitdirectory because it works reliably across all browsers and sandboxed iframes
             document.getElementById('fallbackDirInput').click();
         }
 
@@ -944,7 +1057,6 @@
                 processNormalizedFiles(collected, dirHandle.name);
             } catch (err) {
                 if (err.name !== 'AbortError') {
-                    // Fallback if security frame blocks showDirectoryPicker
                     triggerFolderSelection();
                 }
             }
@@ -961,14 +1073,15 @@
                             name: fileData.name,
                             path: entryPath,
                             size: fileData.size,
+                            type: fileData.type || '',
+                            lastModified: fileData.lastModified || Date.now(),
                             ext: ext,
-                            category: categorizeExtension(ext),
+                            category: categorizeFile(ext, fileData.type),
                             fileObj: fileData,
                             isDemo: false
                         });
                     } catch (e) {}
                 } else if (entry.kind === 'directory') {
-                    // Avoid deep recursion into node_modules/.git during handle traversal if toggle is checked
                     const skipDev = document.getElementById('excludeDevDirsToggle').checked;
                     if (skipDev && IGNORED_DIRS.includes(entry.name)) continue;
                     await scanDirectoryHandleRecursively(entry, entryPath, results);
@@ -976,15 +1089,15 @@
             }
         }
 
-        function handleFallbackFiles(fileList) {
+        function handleFallbackFiles(fileList, customLabel = '') {
             if (!fileList || fileList.length === 0) return;
             const collected = [];
-            let rootFolderName = 'Selected Folder';
+            let rootFolderName = customLabel || 'Selected Folder';
 
             for (let i = 0; i < fileList.length; i++) {
                 const f = fileList[i];
                 const relPath = f.webkitRelativePath || f.name;
-                if (i === 0 && relPath.includes('/')) {
+                if (!customLabel && i === 0 && relPath.includes('/')) {
                     rootFolderName = relPath.split('/')[0];
                 }
                 const ext = getFileExtension(f.name);
@@ -992,8 +1105,10 @@
                     name: f.name,
                     path: relPath,
                     size: f.size,
+                    type: f.type || '',
+                    lastModified: f.lastModified || Date.now(),
                     ext: ext,
-                    category: categorizeExtension(ext),
+                    category: categorizeFile(ext, f.type),
                     fileObj: f,
                     isDemo: false
                 });
@@ -1006,7 +1121,6 @@
             allScannedFiles = fileArray;
             pickedPathsSet.clear();
 
-            // Update Folder Badge
             const badge = document.getElementById('folderStatusBadge');
             badge.textContent = `${folderLabel} (${fileArray.length})`;
             badge.className = 'text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30';
@@ -1019,115 +1133,224 @@
             showToast(`Loaded ${fileArray.length} files from "${folderLabel}"!`, 'success');
         }
 
-        // --- Demo Mode (Virtual PC Folder for Immediate Testing) ---
+        // --- Procedural Real File Generators for Demo Mode (.JPG, .WAV, .MP4/Canvas Video, .CSV, .JSON) ---
+        function createProceduralJpgFile(filename, titleText, gradientColors) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 960;
+            canvas.height = 540;
+            const ctx = canvas.getContext('2d');
+
+            const grad = ctx.createLinearGradient(0, 0, 960, 540);
+            grad.addColorStop(0, gradientColors[0]);
+            grad.addColorStop(0.5, gradientColors[1]);
+            grad.addColorStop(1, gradientColors[2]);
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, 960, 540);
+
+            // Retro synth grid & sun
+            ctx.fillStyle = 'rgba(255, 220, 100, 0.85)';
+            ctx.beginPath();
+            ctx.arc(480, 250, 115, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = '#090d16';
+            ctx.fillRect(0, 330, 960, 210);
+
+            ctx.strokeStyle = 'rgba(236, 72, 153, 0.55)';
+            ctx.lineWidth = 2;
+            for (let y = 345; y < 540; y += 30) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(960, y);
+                ctx.stroke();
+            }
+            for (let x = -200; x <= 1160; x += 120) {
+                ctx.beginPath();
+                ctx.moveTo(480, 330);
+                ctx.lineTo(x, 540);
+                ctx.stroke();
+            }
+
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 34px Inter, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(titleText, 480, 95);
+            ctx.font = '18px monospace';
+            ctx.fillStyle = '#e2e8f0';
+            ctx.fillText(`${filename} • 960x540 True JPEG File`, 480, 135);
+
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+            const byteString = atob(dataUrl.split(',')[1]);
+            const ab = new ArrayBuffer(byteString.length);
+            const ia = new Uint8Array(ab);
+            for (let i = 0; i < byteString.length; i++) {
+                ia[i] = byteString.charCodeAt(i);
+            }
+            return new File([ab], filename, { type: 'image/jpeg', lastModified: Date.now() });
+        }
+
+        function createProceduralWavFile(filename) {
+            const sampleRate = 22050;
+            const durationSeconds = 2.4;
+            const numSamples = Math.floor(sampleRate * durationSeconds);
+            const buffer = new ArrayBuffer(44 + numSamples * 2);
+            const view = new DataView(buffer);
+
+            const writeString = (offset, str) => {
+                for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
+            };
+
+            writeString(0, 'RIFF');
+            view.setUint32(4, 36 + numSamples * 2, true);
+            writeString(8, 'WAVE');
+            writeString(12, 'fmt ');
+            view.setUint32(16, 16, true);
+            view.setUint16(20, 1, true); // PCM
+            view.setUint16(22, 1, true); // Mono
+            view.setUint32(24, sampleRate, true);
+            view.setUint32(28, sampleRate * 2, true);
+            view.setUint16(32, 2, true);
+            view.setUint16(34, 16, true);
+            writeString(36, 'data');
+            view.setUint32(40, numSamples * 2, true);
+
+            const notes = [261.63, 329.63, 392.00, 523.25, 392.00, 523.25];
+            for (let i = 0; i < numSamples; i++) {
+                const t = i / sampleRate;
+                const noteIdx = Math.min(notes.length - 1, Math.floor((t / durationSeconds) * notes.length));
+                const freq = notes[noteIdx];
+                const env = Math.exp(-((t % 0.4) * 5));
+                const sample = Math.sin(2 * Math.PI * freq * t) * 0.45 * env;
+                view.setInt16(44 + i * 2, Math.max(-1, Math.min(1, sample)) * 32767, true);
+            }
+
+            return new File([buffer], filename, { type: 'audio/wav', lastModified: Date.now() });
+        }
+
+        // --- Demo Mode (Virtual PC Folder with Real .JPG, .MP4 Demo Stream, .WAV, .CSV, .JSON, .MD, .PY) ---
         function loadDemoFiles() {
+            const sunsetJpg = createProceduralJpgFile(
+                'Neon_Outrun_Horizon.jpg',
+                'NEON OUTRUN HORIZON // .JPG',
+                ['#0f172a', '#6d28d9', '#ec4899']
+            );
+            const cyberJpg = createProceduralJpgFile(
+                'Cyber_Alley_2099_Photo.JPG',
+                'CYBERPUNK SECTOR 7 // .JPG',
+                ['#022c22', '#0284c7', '#4f46e5']
+            );
+            const synthWav = createProceduralWavFile('Retro_Chiptune_Arpeggio.wav');
+
+            const csvText = `Rank,Game_Title,Genre,Release_Year,Rating_Pct,Hours_Played\n1,Cyber Drift 2099,Racing,2025,96,142.5\n2,Starlight Odyssey,RPG,2024,94,210.0\n3,Pixel Dungeon Tactics,Strategy,2023,91,88.2\n4,Mecha Horizon Zero,Action,2026,89,64.0\n5,Synthwave Racer XT,Arcade,2022,95,315.8`;
+            const csvFile = new File([csvText], 'Top_PC_Games_Benchmarks.csv', { type: 'text/csv', lastModified: Date.now() });
+
+            const jsonText = JSON.stringify({
+                app: "Random File Roulette",
+                version: "3.0.0-Universal",
+                supportedFormats: {
+                    images: [".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".avif", ".bmp"],
+                    videos: [".mp4", ".webm", ".mov", ".mkv", ".m4v"],
+                    audio: [".mp3", ".wav", ".ogg", ".flac", ".m4a"],
+                    dataAndDocs: [".pdf", ".csv", ".json", ".md", ".html", ".py", ".js"]
+                },
+                githubPagesP2P: true
+            }, null, 2);
+            const jsonFile = new File([jsonText], 'PC_System_Diagnostics.json', { type: 'application/json', lastModified: Date.now() });
+
+            const mdText = `# Weekend Creative & Coding Notes\n\n## Why Random File Roulette?\nOpening a random file from your \`Downloads\`, \`Pictures\`, or \`Videos\` folder is the fastest way to rediscover forgotten photos (\`.jpg\`), clips (\`.mp4\`), and prototypes.\n\n- **Zoom & Rotate** any \`.jpg\` or \`.png\` image\n- **Frame Capture** any \`.mp4\` video and broadcast it to your multiplayer room\n- **Interactive Tables** for \`.csv\` spreadsheets`;
+            const mdFile = new File([mdText], 'Project_Roadmap_Notes.md', { type: 'text/markdown', lastModified: Date.now() });
+
+            const pyText = `import os\nimport random\n\ndef pick_random_media(folder_path: str):\n    """Pick a random .jpg or .mp4 file from a directory."""\n    valid_exts = ('.jpg', '.jpeg', '.png', '.mp4', '.webm', '.mp3')\n    pool = [\n        os.path.join(root, f)\n        for root, _, files in os.walk(folder_path)\n        for f in files if f.lower().endswith(valid_exts)\n    ]\n    return random.choice(pool) if pool else None\n\nif __name__ == "__main__":\n    print("Ready to spin your PC files!")`;
+            const pyFile = new File([pyText], 'media_roulette_scanner.py', { type: 'text/x-python', lastModified: Date.now() });
+
             const demoItems = [
                 {
-                    name: 'Synthwave_Sunset_Wallpaper.svg',
-                    path: 'Demo_PC_Folder/Pictures/Wallpapers/Synthwave_Sunset_Wallpaper.svg',
-                    size: 18420,
-                    ext: 'svg',
+                    name: sunsetJpg.name,
+                    path: 'Demo_PC_Folder/Pictures/Wallpapers/' + sunsetJpg.name,
+                    size: sunsetJpg.size,
+                    type: sunsetJpg.type,
+                    lastModified: sunsetJpg.lastModified,
+                    ext: 'jpg',
                     category: 'image',
-                    isDemo: true,
-                    demoType: 'svg',
-                    demoContent: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="100%" height="100%">
-                        <defs>
-                            <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="0%" stop-color="#0f0728"/>
-                                <stop offset="55%" stop-color="#4c1d95"/>
-                                <stop offset="100%" stop-color="#ec4899"/>
-                            </linearGradient>
-                            <linearGradient id="sun" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="0%" stop-color="#fde047"/>
-                                <stop offset="100%" stop-color="#f43f5e"/>
-                            </linearGradient>
-                        </defs>
-                        <rect width="800" height="450" fill="url(#sky)"/>
-                        <circle cx="400" cy="240" r="110" fill="url(#sun)"/>
-                        <rect y="290" width="800" height="160" fill="#090418"/>
-                        <g stroke="#ec4899" stroke-width="1.5" opacity="0.55">
-                            <line x1="0" y1="310" x2="800" y2="310"/>
-                            <line x1="0" y1="340" x2="800" y2="340"/>
-                            <line x1="0" y1="380" x2="800" y2="380"/>
-                            <line x1="0" y1="430" x2="800" y2="430"/>
-                            <line x1="400" y1="290" x2="0" y2="450"/>
-                            <line x1="400" y1="290" x2="200" y2="450"/>
-                            <line x1="400" y1="290" x2="400" y2="450"/>
-                            <line x1="400" y1="290" x2="600" y2="450"/>
-                            <line x1="400" y1="290" x2="800" y2="450"/>
-                        </g>
-                        <text x="400" y="90" fill="#fff" font-family="monospace" font-size="26" font-weight="bold" text-anchor="middle">RANDOM FILE ROULETTE // RETRO SUNSET</text>
-                    </svg>`
+                    fileObj: sunsetJpg,
+                    isDemo: false
                 },
                 {
-                    name: 'weekend_project_ideas.md',
-                    path: 'Demo_PC_Folder/Documents/Notes/weekend_project_ideas.md',
-                    size: 2450,
-                    ext: 'md',
-                    category: 'code',
-                    isDemo: true,
-                    demoContent: `# Weekend Coding & Creative Ideas\n\n1. **Random File Roulette** — Build an app that picks a forgotten file from my Downloads or Reference folder.\n2. **Lo-Fi Beat Generator** — WebAudio synthesizer with rain ambiance.\n3. **Local Markdown Wiki** — Fast personal knowledge base.\n\n> "The best way to rediscover old inspiration is by opening a random file you forgot you saved."`
+                    name: cyberJpg.name,
+                    path: 'Demo_PC_Folder/Pictures/CameraRoll/' + cyberJpg.name,
+                    size: cyberJpg.size,
+                    type: cyberJpg.type,
+                    lastModified: cyberJpg.lastModified,
+                    ext: 'jpg',
+                    category: 'image',
+                    fileObj: cyberJpg,
+                    isDemo: false
                 },
                 {
-                    name: 'retro_arcade_loop.wav',
-                    path: 'Demo_PC_Folder/Music/Samples/retro_arcade_loop.wav',
-                    size: 412000,
+                    name: 'Hyperdrive_Visualizer_Clip.mp4',
+                    path: 'Demo_PC_Folder/Videos/Captures/Hyperdrive_Visualizer_Clip.mp4',
+                    size: 1845200,
+                    type: 'video/mp4',
+                    lastModified: Date.now(),
+                    ext: 'mp4',
+                    category: 'video',
+                    isDemo: true,
+                    demoType: 'procedural-mp4'
+                },
+                {
+                    name: synthWav.name,
+                    path: 'Demo_PC_Folder/Music/Samples/' + synthWav.name,
+                    size: synthWav.size,
+                    type: synthWav.type,
+                    lastModified: synthWav.lastModified,
                     ext: 'wav',
                     category: 'audio',
-                    isDemo: true,
-                    demoType: 'synth-audio'
+                    fileObj: synthWav,
+                    isDemo: false
                 },
                 {
-                    name: 'secret_recipe_ramen.txt',
-                    path: 'Demo_PC_Folder/Documents/Recipes/secret_recipe_ramen.txt',
-                    size: 1320,
-                    ext: 'txt',
+                    name: csvFile.name,
+                    path: 'Demo_PC_Folder/Documents/Spreadsheets/' + csvFile.name,
+                    size: csvFile.size,
+                    type: csvFile.type,
+                    lastModified: csvFile.lastModified,
+                    ext: 'csv',
                     category: 'code',
-                    isDemo: true,
-                    demoContent: `=== MIDNIGHT GARLIC MISO RAMEN ===\n\nIngredients:\n- 2 tbsp Red Miso Paste\n- 1 tbsp Sesame Oil\n- 4 cloves grated garlic & fresh ginger\n- 500ml Chicken or Mushroom Broth\n- Soft-boiled egg (6 min 30 sec)\n- Crispy chili oil & green onions\n\nInstructions:\nSauté garlic and ginger in sesame oil for 60s. Whisk in miso paste and broth. Simmer 5 mins, pour over noodles, top with jammy egg!`
+                    fileObj: csvFile,
+                    isDemo: false
                 },
                 {
-                    name: 'fibonacci_visualizer.py',
-                    path: 'Demo_PC_Folder/Projects/Python/fibonacci_visualizer.py',
-                    size: 1890,
-                    ext: 'py',
-                    category: 'code',
-                    isDemo: true,
-                    demoContent: `import math\n\ndef golden_spiral_points(n=20):\n    """Generate coordinates along a Fibonacci Golden Spiral."""\n    phi = (1 + math.sqrt(5)) / 2\n    points = []\n    for i in range(n):\n        theta = i * 2 * math.pi / (phi ** 2)\n        r = math.sqrt(i) * 10\n        x = round(r * math.cos(theta), 2)\n        y = round(r * math.sin(theta), 2)\n        points.append((x, y))\n    return points\n\nif __name__ == "__main__":\n    for idx, pt in enumerate(golden_spiral_points(12)):\n        print(f"Point {idx:02d}: {pt}")`
-                },
-                {
-                    name: 'Cyberpunk_City_Blueprint.svg',
-                    path: 'Demo_PC_Folder/Pictures/ConceptArt/Cyberpunk_City_Blueprint.svg',
-                    size: 29400,
-                    ext: 'svg',
-                    category: 'image',
-                    isDemo: true,
-                    demoType: 'svg',
-                    demoContent: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="100%" height="100%">
-                        <rect width="800" height="450" fill="#041326"/>
-                        <g stroke="#0ea5e9" stroke-width="1" opacity="0.2">
-                            <path d="M 0 50 H 800 M 0 100 H 800 M 0 150 H 800 M 0 200 H 800 M 0 250 H 800 M 0 300 H 800 M 0 350 H 800 M 0 400 H 800"/>
-                            <path d="M 100 0 V 450 M 200 0 V 450 M 300 0 V 450 M 400 0 V 450 M 500 0 V 450 M 600 0 V 450 M 700 0 V 450"/>
-                        </g>
-                        <g fill="none" stroke="#38bdf8" stroke-width="2.5">
-                            <rect x="120" y="130" width="90" height="270"/>
-                            <rect x="240" y="80" width="130" height="320"/>
-                            <rect x="400" y="160" width="110" height="240"/>
-                            <rect x="540" y="100" width="140" height="300"/>
-                            <polygon points="240,80 305,30 370,80"/>
-                            <circle cx="610" cy="170" r="35" stroke="#f43f5e"/>
-                        </g>
-                        <text x="40" y="45" fill="#38bdf8" font-family="monospace" font-size="18">CAD // SECTOR-7 SKYLINE BLUEPRINT</text>
-                    </svg>`
-                },
-                {
-                    name: 'keyboard_shortcuts_cheatsheet.json',
-                    path: 'Demo_PC_Folder/Config/keyboard_shortcuts_cheatsheet.json',
-                    size: 940,
+                    name: jsonFile.name,
+                    path: 'Demo_PC_Folder/Config/' + jsonFile.name,
+                    size: jsonFile.size,
+                    type: jsonFile.type,
+                    lastModified: jsonFile.lastModified,
                     ext: 'json',
                     category: 'code',
-                    isDemo: true,
-                    demoContent: `{\n  "app": "Random File Roulette",\n  "version": "2.0.0",\n  "shortcuts": {\n    "Space": "Spin the Roulette Wheel",\n    "Instant_Pick": "Pick without slot animation",\n    "No_Repeats": "Prevents picking the same file twice"\n  },\n  "privacy": "100% Local Browser Sandbox"\n}`
+                    fileObj: jsonFile,
+                    isDemo: false
+                },
+                {
+                    name: mdFile.name,
+                    path: 'Demo_PC_Folder/Documents/Notes/' + mdFile.name,
+                    size: mdFile.size,
+                    type: mdFile.type,
+                    lastModified: mdFile.lastModified,
+                    ext: 'md',
+                    category: 'code',
+                    fileObj: mdFile,
+                    isDemo: false
+                },
+                {
+                    name: pyFile.name,
+                    path: 'Demo_PC_Folder/Projects/Python/' + pyFile.name,
+                    size: pyFile.size,
+                    type: pyFile.type,
+                    lastModified: pyFile.lastModified,
+                    ext: 'py',
+                    category: 'code',
+                    fileObj: pyFile,
+                    isDemo: false
                 }
             ];
 
@@ -1334,7 +1557,127 @@
             renderFilePreview(winnerFile);
         }
 
-        // --- Built-in Instant File Previewer ---
+        // --- Image Viewer Controls (Zoom, Rotate, Reset, Fullscreen) ---
+        window.adjustPreviewImageZoom = (delta) => {
+            imgZoomLevel = Math.max(0.25, Math.min(4, +(imgZoomLevel + delta).toFixed(2)));
+            applyImageTransform();
+        };
+
+        window.rotatePreviewImage = (deg) => {
+            imgRotationDeg = (imgRotationDeg + deg) % 360;
+            applyImageTransform();
+        };
+
+        window.resetPreviewImageTransform = () => {
+            imgZoomLevel = 1;
+            imgRotationDeg = 0;
+            applyImageTransform();
+        };
+
+        function applyImageTransform() {
+            const img = document.getElementById('activePreviewImgEl');
+            const label = document.getElementById('imgZoomBadge');
+            if (img) {
+                img.style.transform = `scale(${imgZoomLevel}) rotate(${imgRotationDeg}deg)`;
+            }
+            if (label) {
+                label.textContent = `${Math.round(imgZoomLevel * 100)}%`;
+            }
+        }
+
+        window.onPreviewImageLoaded = (imgEl) => {
+            const metaBadge = document.getElementById('imgDimensionsBadge');
+            if (metaBadge && imgEl.naturalWidth) {
+                metaBadge.textContent = `${imgEl.naturalWidth} × ${imgEl.naturalHeight} px`;
+            }
+        };
+
+        // --- Video Player Controls (Speed & Live Frame Capture to P2P Room) ---
+        window.setPreviewVideoSpeed = (rate) => {
+            const vid = document.getElementById('activePreviewVideoEl');
+            if (vid) vid.playbackRate = parseFloat(rate);
+        };
+
+        window.onPreviewVideoMetadata = (vidEl) => {
+            const badge = document.getElementById('videoResolutionBadge');
+            if (badge && vidEl.videoWidth) {
+                const dur = isFinite(vidEl.duration) ? `${vidEl.duration.toFixed(1)}s` : '';
+                badge.textContent = `${vidEl.videoWidth}×${vidEl.videoHeight} ${dur ? '• ' + dur : ''}`;
+            }
+        };
+
+        window.captureVideoFrameToRoom = () => {
+            const vid = document.getElementById('activePreviewVideoEl');
+            if (!vid || !currentSelectedFile) return;
+            try {
+                const canvas = document.createElement('canvas');
+                const maxW = 480;
+                const scale = Math.min(1, maxW / (vid.videoWidth || 640));
+                canvas.width = Math.round((vid.videoWidth || 640) * scale);
+                canvas.height = Math.round((vid.videoHeight || 360) * scale);
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(vid, 0, 0, canvas.width, canvas.height);
+                const frameDataUrl = canvas.toDataURL('image/jpeg', 0.78);
+
+                if (typeof window.mpBroadcastCapturedFrame === 'function') {
+                    window.mpBroadcastCapturedFrame(currentSelectedFile, frameDataUrl, vid.currentTime);
+                }
+                showToast('Captured current MP4/Video frame & shared with Multiplayer Room!', 'success');
+            } catch (e) {
+                showToast('Could not capture frame from this video stream.', 'warning');
+            }
+        };
+
+        // --- Procedural Animated MP4/Canvas Stream Fallback for Demo Mode ---
+        let demoVideoAnimId = null;
+        function startProceduralMp4DemoCanvas() {
+            if (demoVideoAnimId) cancelAnimationFrame(demoVideoAnimId);
+            const canvas = document.getElementById('demoMp4Canvas');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            let stars = Array.from({ length: 90 }, () => ({
+                x: (Math.random() - 0.5) * 640,
+                y: (Math.random() - 0.5) * 360,
+                z: Math.random() * 640
+            }));
+            let t = 0;
+            function draw() {
+                if (!document.getElementById('demoMp4Canvas')) return;
+                t += 0.03;
+                ctx.fillStyle = 'rgba(9, 13, 22, 0.35)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                const cx = canvas.width / 2;
+                const cy = canvas.height / 2;
+                stars.forEach(s => {
+                    s.z -= 6;
+                    if (s.z <= 1) {
+                        s.z = 640;
+                        s.x = (Math.random() - 0.5) * 640;
+                        s.y = (Math.random() - 0.5) * 360;
+                    }
+                    const sx = cx + (s.x / s.z) * 280;
+                    const sy = cy + (s.y / s.z) * 280;
+                    const r = Math.max(0.8, (1 - s.z / 640) * 3.5);
+                    ctx.fillStyle = '#818cf8';
+                    ctx.beginPath();
+                    ctx.arc(sx, sy, r, 0, Math.PI * 2);
+                    ctx.fill();
+                });
+
+                ctx.fillStyle = '#f8fafc';
+                ctx.font = 'bold 16px JetBrains Mono, monospace';
+                ctx.fillText('DEMO .MP4 VIDEO STREAM // 60 FPS', 20, 32);
+                ctx.fillStyle = '#38bdf8';
+                ctx.font = '12px JetBrains Mono, monospace';
+                ctx.fillText(`TIMECODE: 00:00:${(t % 60).toFixed(2).padStart(5, '0')}`, 20, 52);
+
+                demoVideoAnimId = requestAnimationFrame(draw);
+            }
+            draw();
+        }
+
+        // --- Built-in Universal Instant File Previewer ---
         async function renderFilePreview(fileItem) {
             const viewport = document.getElementById('previewViewport');
             const titleEl = document.getElementById('previewTitle');
@@ -1342,21 +1685,43 @@
             const badgeEl = document.getElementById('previewFileBadge');
             const actionsEl = document.getElementById('previewActions');
 
-            // Cleanup previous object URL to avoid memory leaks
+            if (demoVideoAnimId) {
+                cancelAnimationFrame(demoVideoAnimId);
+                demoVideoAnimId = null;
+            }
+            if (activeAudioVisualizerId) {
+                cancelAnimationFrame(activeAudioVisualizerId);
+                activeAudioVisualizerId = null;
+            }
+
             if (currentObjectUrl) {
                 URL.revokeObjectURL(currentObjectUrl);
                 currentObjectUrl = null;
             }
 
+            imgZoomLevel = 1;
+            imgRotationDeg = 0;
+
             titleEl.textContent = fileItem.name;
-            subtitleEl.textContent = `${fileItem.path} (${formatBytes(fileItem.size)})`;
+            subtitleEl.textContent = `${fileItem.path} (${formatBytes(fileItem.size)} • .${(fileItem.ext || 'file').toUpperCase()})`;
             badgeEl.innerHTML = getCategoryIconHTML(fileItem.category);
             actionsEl.classList.remove('hidden');
             actionsEl.classList.add('flex');
 
-            // Handle Demo Virtual Files
+            // 1. Handle Demo Virtual Files
             if (fileItem.isDemo) {
-                if (fileItem.demoType === 'svg') {
+                if (fileItem.demoType === 'procedural-mp4') {
+                    viewport.innerHTML = `
+                        <div class="w-full flex flex-col items-center space-y-3">
+                            <div class="w-full flex flex-wrap items-center justify-between gap-2 px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-xs">
+                                <span class="font-mono text-purple-300"><i class="fa-solid fa-film mr-1.5"></i>MP4 / H.264 Stream Simulation (640×360)</span>
+                                <span class="text-slate-400">Select any local <code class="text-slate-200">.mp4</code> file on your PC for full native playback</span>
+                            </div>
+                            <canvas id="demoMp4Canvas" width="640" height="340" class="w-full max-w-2xl rounded-xl border border-slate-800 bg-slate-950 shadow-xl"></canvas>
+                        </div>`;
+                    startProceduralMp4DemoCanvas();
+                    return;
+                } else if (fileItem.demoType === 'svg') {
                     const blob = new Blob([fileItem.demoContent], { type: 'image/svg+xml' });
                     currentObjectUrl = URL.createObjectURL(blob);
                     viewport.innerHTML = `
@@ -1366,98 +1731,313 @@
                             </div>
                         </div>`;
                     return;
-                } else if (fileItem.demoType === 'synth-audio') {
-                    viewport.innerHTML = `
-                        <div class="text-center py-10 space-y-4">
-                            <div class="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center mx-auto text-amber-400 text-2xl">
-                                <i class="fa-solid fa-music"></i>
-                            </div>
-                            <p class="text-sm font-bold text-white">${escapeHtml(fileItem.name)} (Demo Synth Loop)</p>
-                            <button onclick="playWinnerSound()" class="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition">
-                                <i class="fa-solid fa-play mr-1"></i> Play Retro Arpeggio Sample
-                            </button>
-                        </div>`;
-                    return;
-                } else {
-                    const blob = new Blob([fileItem.demoContent || ''], { type: 'text/plain;charset=utf-8' });
-                    currentObjectUrl = URL.createObjectURL(blob);
-                    viewport.innerHTML = `<pre class="w-full text-left font-mono text-xs text-emerald-300 bg-slate-950 p-4 rounded-xl overflow-x-auto whitespace-pre-wrap leading-relaxed">${escapeHtml(fileItem.demoContent)}</pre>`;
-                    return;
                 }
             }
 
-            // Real Local PC File Preview via URL.createObjectURL
+            // 2. Real Local PC File Preview via URL.createObjectURL
             const rawFile = fileItem.fileObj;
             if (!rawFile) return;
 
             currentObjectUrl = URL.createObjectURL(rawFile);
+            const ext = (fileItem.ext || '').toLowerCase();
 
+            // --- A. IMAGE PREVIEWER (.JPG, .JPEG, .PNG, .GIF, .WEBP, .SVG, .AVIF, .BMP, .ICO) ---
             if (fileItem.category === 'image') {
                 viewport.innerHTML = `
-                    <img src="${currentObjectUrl}" alt="${escapeHtml(fileItem.name)}" 
-                         class="max-h-[460px] w-auto object-contain rounded-xl shadow-lg border border-slate-800">
-                `;
-            } else if (fileItem.category === 'video') {
-                viewport.innerHTML = `
-                    <video src="${currentObjectUrl}" controls autoplay 
-                           class="max-h-[460px] w-full rounded-xl bg-black shadow-lg">
-                        Your browser does not support HTML5 video playback for this codec.
-                    </video>
-                `;
-            } else if (fileItem.category === 'audio') {
-                viewport.innerHTML = `
-                    <div class="w-full max-w-md text-center py-10 space-y-4">
-                        <div class="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center mx-auto text-amber-400 text-2xl animate-pulse">
-                            <i class="fa-solid fa-compact-disc"></i>
+                    <div class="w-full flex flex-col items-center space-y-3">
+                        <!-- Image Toolbar -->
+                        <div class="w-full flex flex-wrap items-center justify-between gap-2 px-3 py-2 rounded-xl bg-slate-900/90 border border-slate-800 text-xs">
+                            <div class="flex items-center gap-2">
+                                <span class="px-2 py-0.5 rounded bg-pink-500/15 text-pink-300 border border-pink-500/30 font-mono font-bold">.${escapeHtml(ext.toUpperCase() || 'IMG')}</span>
+                                <span id="imgDimensionsBadge" class="font-mono text-slate-400">Loading dimensions...</span>
+                            </div>
+                            <div class="flex items-center gap-1.5">
+                                <button onclick="adjustPreviewImageZoom(-0.25)" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition" title="Zoom Out">
+                                    <i class="fa-solid fa-magnifying-glass-minus"></i>
+                                </button>
+                                <span id="imgZoomBadge" class="font-mono text-slate-300 w-12 text-center">100%</span>
+                                <button onclick="adjustPreviewImageZoom(0.25)" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition" title="Zoom In">
+                                    <i class="fa-solid fa-magnifying-glass-plus"></i>
+                                </button>
+                                <button onclick="rotatePreviewImage(90)" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition" title="Rotate 90°">
+                                    <i class="fa-solid fa-rotate-right"></i>
+                                </button>
+                                <button onclick="resetPreviewImageTransform()" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition" title="Reset View">
+                                    Reset
+                                </button>
+                            </div>
                         </div>
-                        <div class="text-sm font-bold text-white truncate">${escapeHtml(fileItem.name)}</div>
-                        <audio src="${currentObjectUrl}" controls autoplay class="w-full"></audio>
+
+                        <!-- Image Stage -->
+                        <div class="w-full min-h-[280px] max-h-[440px] overflow-auto flex items-center justify-center bg-slate-950/80 rounded-xl border border-slate-800/80 p-4">
+                            <img id="activePreviewImgEl"
+                                 src="${currentObjectUrl}"
+                                 alt="${escapeHtml(fileItem.name)}"
+                                 onload="onPreviewImageLoaded(this)"
+                                 onerror="this.parentElement.innerHTML='<div class=\\'text-center text-slate-400 py-8 text-xs\\'>Browser cannot decode this raw image format natively (.HEIC/.TIFF). Click <b>Open in New Tab</b> or <b>Download / Launch</b> above.</div>'"
+                                 class="max-h-[390px] w-auto object-contain rounded-lg shadow-xl transition-transform duration-200">
+                        </div>
                     </div>
                 `;
-            } else if (fileItem.ext === 'pdf') {
+                return;
+            }
+
+            // --- B. VIDEO PREVIEWER (.MP4, .WEBM, .MOV, .MKV, .AVI, .M4V, .OGV) ---
+            if (fileItem.category === 'video') {
+                viewport.innerHTML = `
+                    <div class="w-full flex flex-col items-center space-y-3">
+                        <!-- Video Control Bar -->
+                        <div class="w-full flex flex-wrap items-center justify-between gap-2 px-3 py-2 rounded-xl bg-slate-900/90 border border-slate-800 text-xs">
+                            <div class="flex items-center gap-2">
+                                <span class="px-2 py-0.5 rounded bg-purple-500/15 text-purple-300 border border-purple-500/30 font-mono font-bold">.${escapeHtml(ext.toUpperCase() || 'MP4')}</span>
+                                <span id="videoResolutionBadge" class="font-mono text-slate-400">Ready to play</span>
+                            </div>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <label class="text-slate-400 flex items-center gap-1">
+                                    <span>Speed:</span>
+                                    <select onchange="setPreviewVideoSpeed(this.value)" class="bg-slate-950 border border-slate-700 rounded-lg px-2 py-0.5 text-slate-200 font-mono outline-none">
+                                        <option value="0.5">0.5x</option>
+                                        <option value="1" selected>1.0x</option>
+                                        <option value="1.25">1.25x</option>
+                                        <option value="1.5">1.5x</option>
+                                        <option value="2">2.0x</option>
+                                    </select>
+                                </label>
+                                <button onclick="captureVideoFrameToRoom()" class="px-2.5 py-1 rounded-lg bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 border border-indigo-500/30 font-semibold transition flex items-center gap-1" title="Capture current video frame and broadcast to Multiplayer Room">
+                                    <i class="fa-solid fa-camera"></i>
+                                    <span>Share Frame to Room</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- HTML5 Video Player -->
+                        <video id="activePreviewVideoEl"
+                               src="${currentObjectUrl}"
+                               controls
+                               autoplay
+                               playsinline
+                               onloadedmetadata="onPreviewVideoMetadata(this)"
+                               class="max-h-[420px] w-full rounded-xl bg-black shadow-2xl border border-slate-800">
+                            Your browser does not support HTML5 video playback for this container/codec.
+                        </video>
+                    </div>
+                `;
+                return;
+            }
+
+            // --- C. AUDIO PREVIEWER + FREQUENCY SPECTRUM (.MP3, .WAV, .OGG, .FLAC, .M4A, .AAC) ---
+            if (fileItem.category === 'audio') {
+                viewport.innerHTML = `
+                    <div class="w-full max-w-lg text-center py-6 space-y-4">
+                        <div class="flex items-center justify-center gap-3">
+                            <div class="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 text-xl">
+                                <i class="fa-solid fa-wave-square"></i>
+                            </div>
+                            <div class="text-left min-w-0">
+                                <div class="text-sm font-bold text-white truncate">${escapeHtml(fileItem.name)}</div>
+                                <div class="text-xs font-mono text-amber-400">.${escapeHtml(ext.toUpperCase())} Audio Stream • ${formatBytes(fileItem.size)}</div>
+                            </div>
+                        </div>
+                        <canvas id="audioSpectrumCanvas" width="440" height="90" class="w-full h-24 rounded-xl bg-slate-900/90 border border-slate-800"></canvas>
+                        <audio id="activePreviewAudioEl" src="${currentObjectUrl}" controls autoplay class="w-full"></audio>
+                    </div>
+                `;
+                attachAudioVisualizer();
+                return;
+            }
+
+            // --- D. PDF DOCUMENT PREVIEWER (.PDF) ---
+            if (ext === 'pdf') {
                 viewport.innerHTML = `
                     <iframe src="${currentObjectUrl}" class="w-full h-[460px] rounded-xl border border-slate-800 bg-white"></iframe>
                 `;
-            } else if (fileItem.category === 'code' || rawFile.size < 512 * 1024) {
-                // Attempt reading text content for code/text files up to 512KB
+                return;
+            }
+
+            // --- E. CSV / TSV INTERACTIVE TABLE PREVIEWER ---
+            if ((ext === 'csv' || ext === 'tsv') && rawFile.size < 2 * 1024 * 1024) {
+                try {
+                    const text = await rawFile.text();
+                    const delimiter = ext === 'tsv' ? '\t' : ',';
+                    const rows = text.trim().split(/\r?\n/).slice(0, 75).map(line => line.split(delimiter));
+                    if (rows.length > 0) {
+                        const headers = rows[0];
+                        const bodyRows = rows.slice(1);
+                        viewport.innerHTML = `
+                            <div class="w-full space-y-2">
+                                <div class="flex items-center justify-between text-xs text-slate-400 px-1">
+                                    <span><i class="fa-solid fa-table text-emerald-400 mr-1.5"></i>Interactive Spreadsheet Preview (${bodyRows.length} rows shown)</span>
+                                    <span class="font-mono">.${ext.toUpperCase()}</span>
+                                </div>
+                                <div class="w-full overflow-x-auto rounded-xl border border-slate-800">
+                                    <table class="w-full text-left border-collapse text-xs">
+                                        <thead>
+                                            <tr class="bg-slate-900 border-b border-slate-800 text-indigo-300 font-mono">
+                                                ${headers.map(h => `<th class="py-2.5 px-3 font-bold">${escapeHtml(h.trim())}</th>`).join('')}
+                                            </tr>
+                                        </thead>
+                                        <tbody class="divide-y divide-slate-800/60 bg-slate-950 font-mono text-slate-300">
+                                            ${bodyRows.map(r => `
+                                                <tr class="hover:bg-slate-900/60">
+                                                    ${r.map(cell => `<td class="py-2 px-3 whitespace-nowrap">${escapeHtml(cell.trim())}</td>`).join('')}
+                                                </tr>
+                                            `).join('')}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        `;
+                        return;
+                    }
+                } catch (e) {}
+            }
+
+            // --- F. JSON PRETTY TREE PREVIEWER (.JSON) ---
+            if (ext === 'json' && rawFile.size < 2 * 1024 * 1024) {
+                try {
+                    const rawText = await rawFile.text();
+                    const parsed = JSON.parse(rawText);
+                    const pretty = JSON.stringify(parsed, null, 2);
+                    viewport.innerHTML = `
+                        <div class="w-full space-y-2">
+                            <div class="flex items-center justify-between text-xs text-slate-400 px-1">
+                                <span><i class="fa-solid fa-brackets-curly text-amber-400 mr-1.5"></i>Formatted JSON Document (${Object.keys(parsed).length} top-level keys)</span>
+                                <span class="font-mono text-emerald-400">Valid JSON</span>
+                            </div>
+                            <pre class="w-full text-left font-mono text-xs text-amber-200 bg-slate-950 p-4 rounded-xl border border-slate-800 overflow-x-auto whitespace-pre-wrap leading-relaxed">${escapeHtml(pretty.slice(0, 25000))}</pre>
+                        </div>
+                    `;
+                    return;
+                } catch (e) {}
+            }
+
+            // --- G. MARKDOWN RENDERED PREVIEWER (.MD, .MARKDOWN) ---
+            if ((ext === 'md' || ext === 'markdown') && rawFile.size < 1024 * 1024) {
+                try {
+                    const mdText = await rawFile.text();
+                    const renderedHtml = renderSimpleMarkdown(mdText);
+                    viewport.innerHTML = `
+                        <div class="w-full space-y-3 text-left">
+                            <div class="flex items-center justify-between text-xs text-slate-400 border-b border-slate-800 pb-2">
+                                <span><i class="fa-brands fa-markdown text-indigo-400 mr-1.5"></i>Rendered Markdown Document</span>
+                                <span class="font-mono">.MD</span>
+                            </div>
+                            <div class="prose prose-invert max-w-none text-sm text-slate-200 space-y-2 leading-relaxed p-2">
+                                ${renderedHtml}
+                            </div>
+                        </div>
+                    `;
+                    return;
+                } catch (e) {}
+            }
+
+            // --- H. CODE & TEXT FILES WITH LINE NUMBERS ---
+            if (fileItem.category === 'code' || rawFile.size < 256 * 1024) {
                 try {
                     const textContent = await rawFile.text();
-                    // Check if binary file disguised as unknown extension
-                    if (textContent.includes('\u0000')) {
-                        renderGenericBinaryCard(viewport, fileItem);
-                    } else {
-                        const truncated = textContent.length > 25000 
-                            ? textContent.slice(0, 25000) + '\n\n... [Preview truncated at 25,000 characters. Open in New Tab for full file]' 
+                    if (!textContent.includes('\u0000')) {
+                        const truncated = textContent.length > 25000
+                            ? textContent.slice(0, 25000) + '\n\n... [Preview truncated at 25,000 characters]'
                             : textContent;
-                        viewport.innerHTML = `<pre class="w-full text-left font-mono text-xs text-slate-200 bg-slate-950 p-4 rounded-xl overflow-x-auto whitespace-pre-wrap leading-relaxed">${escapeHtml(truncated)}</pre>`;
+                        const lines = truncated.split(/\r?\n/);
+                        const numberedHtml = lines.slice(0, 400).map((line, i) =>
+                            `<div class="flex hover:bg-slate-900/60 px-2"><span class="w-10 shrink-0 select-none text-slate-600 text-right pr-3">${i + 1}</span><span class="flex-1 whitespace-pre-wrap break-all">${escapeHtml(line) || ' '}</span></div>`
+                        ).join('');
+                        viewport.innerHTML = `
+                            <div class="w-full text-left font-mono text-xs text-emerald-300 bg-slate-950 py-3 rounded-xl border border-slate-800 overflow-x-auto leading-relaxed">
+                                ${numberedHtml}
+                            </div>`;
+                        return;
                     }
-                } catch (e) {
-                    renderGenericBinaryCard(viewport, fileItem);
-                }
-            } else {
-                renderGenericBinaryCard(viewport, fileItem);
+                } catch (e) {}
             }
+
+            // --- I. BINARY / ARCHIVE / EXECUTABLE HEX HEADER INSPECTOR ---
+            await renderBinaryHexInspectorCard(viewport, fileItem);
         }
 
-        function renderGenericBinaryCard(viewport, fileItem) {
+        function attachAudioVisualizer() {
+            const audioEl = document.getElementById('activePreviewAudioEl');
+            const canvas = document.getElementById('audioSpectrumCanvas');
+            if (!audioEl || !canvas) return;
+            const ctx = canvas.getContext('2d');
+            let phase = 0;
+
+            function drawBars() {
+                if (!document.getElementById('audioSpectrumCanvas')) return;
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                const isPlaying = !audioEl.paused && !audioEl.ended;
+                if (isPlaying) phase += 0.15;
+
+                const barCount = 36;
+                const barWidth = Math.floor(canvas.width / barCount) - 3;
+                for (let i = 0; i < barCount; i++) {
+                    const ratio = isPlaying
+                        ? 0.2 + 0.75 * Math.abs(Math.sin(phase + i * 0.35) * Math.cos(phase * 0.7 - i * 0.2))
+                        : 0.08;
+                    const h = Math.max(4, Math.round(ratio * (canvas.height - 12)));
+                    const x = i * (barWidth + 3) + 4;
+                    const y = canvas.height - h - 4;
+                    ctx.fillStyle = isPlaying ? '#f59e0b' : '#334155';
+                    ctx.fillRect(x, y, barWidth, h);
+                }
+                activeAudioVisualizerId = requestAnimationFrame(drawBars);
+            }
+            drawBars();
+        }
+
+        function renderSimpleMarkdown(md) {
+            return escapeHtml(md)
+                .replace(/^### (.*$)/gim, '<h3 class="text-base font-bold text-indigo-300 mt-3">$1</h3>')
+                .replace(/^## (.*$)/gim, '<h2 class="text-lg font-extrabold text-white mt-4">$1</h2>')
+                .replace(/^# (.*$)/gim, '<h1 class="text-xl font-extrabold text-white mt-2">$1</h1>')
+                .replace(/\*\*(.*?)\*\*/gim, '<strong class="text-white font-bold">$1</strong>')
+                .replace(/`([^`]+)`/gim, '<code class="px-1.5 py-0.5 rounded bg-slate-800 text-amber-300 font-mono text-xs">$1</code>')
+                .replace(/^- (.*$)/gim, '<li class="ml-4 list-disc text-slate-300">$1</li>')
+                .replace(/\n\n/g, '<br><br>');
+        }
+
+        async function renderBinaryHexInspectorCard(viewport, fileItem) {
+            let hexRowsHtml = '';
+            if (fileItem.fileObj) {
+                try {
+                    const slice = fileItem.fileObj.slice(0, 128);
+                    const buf = await slice.arrayBuffer();
+                    const bytes = new Uint8Array(buf);
+                    const lines = [];
+                    for (let offset = 0; offset < bytes.length; offset += 16) {
+                        const chunk = bytes.slice(offset, offset + 16);
+                        const hexPart = Array.from(chunk).map(b => b.toString(16).padStart(2, '0').toUpperCase()).join(' ');
+                        const asciiPart = Array.from(chunk).map(b => (b >= 32 && b <= 126) ? String.fromCharCode(b) : '.').join('');
+                        lines.push(`${offset.toString(16).padStart(4, '0').toUpperCase()}  ${hexPart.padEnd(48, ' ')}  |${asciiPart}|`);
+                    }
+                    hexRowsHtml = `
+                        <div class="w-full text-left mt-3">
+                            <div class="text-[11px] font-mono text-slate-400 mb-1">First 128 Bytes (Hex / Magic Signature Inspector):</div>
+                            <pre class="font-mono text-[11px] text-sky-300 bg-slate-900/90 border border-slate-800 rounded-xl p-3 overflow-x-auto leading-relaxed">${escapeHtml(lines.join('\n'))}</pre>
+                        </div>`;
+                } catch (e) {}
+            }
+
+            const modDate = fileItem.lastModified ? new Date(fileItem.lastModified).toLocaleString() : 'Unknown';
             viewport.innerHTML = `
-                <div class="text-center py-10 space-y-4 max-w-md">
-                    <div class="w-16 h-16 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center mx-auto text-indigo-400 text-3xl">
+                <div class="text-center py-6 space-y-3 max-w-xl w-full">
+                    <div class="w-14 h-14 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center mx-auto text-indigo-400 text-2xl">
                         ${getCategoryIconHTML(fileItem.category)}
                     </div>
                     <div>
                         <h4 class="text-base font-bold text-white break-all">${escapeHtml(fileItem.name)}</h4>
-                        <p class="text-xs text-slate-400 font-mono mt-1">${formatBytes(fileItem.size)} • .${escapeHtml(fileItem.ext || 'binary')}</p>
+                        <p class="text-xs text-slate-400 font-mono mt-1">
+                            ${formatBytes(fileItem.size)} • .${escapeHtml((fileItem.ext || 'bin').toUpperCase())} • Modified: ${escapeHtml(modDate)}
+                        </p>
                     </div>
-                    <p class="text-xs text-slate-400">
-                        This file format cannot be rendered directly inside a browser preview frame. Click below to open or launch it with your computer's default application.
-                    </p>
+                    ${hexRowsHtml}
                     <div class="flex items-center justify-center gap-3 pt-2">
-                        <button onclick="openFileInNewTab()" class="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition">
+                        <button onclick="openFileInNewTab()" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition">
                             <i class="fa-solid fa-arrow-up-right-from-square mr-1.5"></i> Open in New Tab
                         </button>
-                        <button onclick="downloadOrLaunchFile()" class="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold border border-slate-700 transition">
-                            <i class="fa-solid fa-download mr-1.5"></i> Save / Launch Externally
+                        <button onclick="downloadOrLaunchFile()" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold border border-slate-700 transition">
+                            <i class="fa-solid fa-download mr-1.5"></i> Download / Launch in OS
                         </button>
                     </div>
                 </div>
@@ -2349,16 +2929,16 @@ if __name__ == "__main__":
             }
         }
 
-        // Helper: Create compact image thumbnail dataURL so peers in the room can see image reveals over WebRTC
+        // Helper: Create compact image thumbnail dataURL (.jpg/.png/etc.) so peers in the room see image reveals over WebRTC
         function generateImageThumbnailDataUrl(fileObj) {
             return new Promise((resolve) => {
                 try {
                     const url = URL.createObjectURL(fileObj);
                     const img = new Image();
                     img.onload = () => {
-                        const maxDim = 360;
-                        let w = img.width || 320;
-                        let h = img.height || 200;
+                        const maxDim = 420;
+                        let w = img.naturalWidth || img.width || 360;
+                        let h = img.naturalHeight || img.height || 240;
                         if (w > maxDim || h > maxDim) {
                             if (w > h) { h = Math.round((h * maxDim) / w); w = maxDim; }
                             else { w = Math.round((w * maxDim) / h); h = maxDim; }
@@ -2369,15 +2949,81 @@ if __name__ == "__main__":
                         const ctx = canvas.getContext('2d');
                         ctx.drawImage(img, 0, 0, w, h);
                         URL.revokeObjectURL(url);
-                        resolve(canvas.toDataURL('image/jpeg', 0.72));
+                        resolve({
+                            dataUrl: canvas.toDataURL('image/jpeg', 0.76),
+                            meta: `${img.naturalWidth || w}×${img.naturalHeight || h}px`
+                        });
                     };
                     img.onerror = () => {
                         URL.revokeObjectURL(url);
-                        resolve('');
+                        resolve({ dataUrl: '', meta: '' });
                     };
                     img.src = url;
                 } catch (e) {
-                    resolve('');
+                    resolve({ dataUrl: '', meta: '' });
+                }
+            });
+        }
+
+        // Helper: Extract a live video poster frame + resolution/duration from any .MP4/.WebM video file for WebRTC P2P broadcast
+        function generateVideoPosterDataUrl(fileObj) {
+            return new Promise((resolve) => {
+                try {
+                    const url = URL.createObjectURL(fileObj);
+                    const video = document.createElement('video');
+                    video.preload = 'metadata';
+                    video.muted = true;
+                    video.playsInline = true;
+
+                    let resolved = false;
+                    const finish = (result) => {
+                        if (resolved) return;
+                        resolved = true;
+                        URL.revokeObjectURL(url);
+                        resolve(result);
+                    };
+
+                    const timeoutId = setTimeout(() => finish({ dataUrl: '', meta: 'MP4 Video' }), 2600);
+
+                    video.onloadedmetadata = () => {
+                        // Seek to 20% or 0.5s to grab a non-black frame
+                        const targetTime = isFinite(video.duration) && video.duration > 1 ? Math.min(1.5, video.duration * 0.25) : 0.1;
+                        video.currentTime = targetTime;
+                    };
+
+                    video.onseeked = () => {
+                        clearTimeout(timeoutId);
+                        try {
+                            const maxDim = 420;
+                            let w = video.videoWidth || 420;
+                            let h = video.videoHeight || 240;
+                            if (w > maxDim || h > maxDim) {
+                                if (w > h) { h = Math.round((h * maxDim) / w); w = maxDim; }
+                                else { w = Math.round((w * maxDim) / h); h = maxDim; }
+                            }
+                            const canvas = document.createElement('canvas');
+                            canvas.width = w;
+                            canvas.height = h;
+                            const ctx = canvas.getContext('2d');
+                            ctx.drawImage(video, 0, 0, w, h);
+                            const durLabel = isFinite(video.duration) ? `${video.duration.toFixed(1)}s` : '';
+                            finish({
+                                dataUrl: canvas.toDataURL('image/jpeg', 0.75),
+                                meta: `${video.videoWidth || w}×${video.videoHeight || h} ${durLabel ? '• ' + durLabel : ''}`
+                            });
+                        } catch (err) {
+                            finish({ dataUrl: '', meta: 'Video Stream' });
+                        }
+                    };
+
+                    video.onerror = () => {
+                        clearTimeout(timeoutId);
+                        finish({ dataUrl: '', meta: '' });
+                    };
+
+                    video.src = url;
+                } catch (e) {
+                    resolve({ dataUrl: '', meta: '' });
                 }
             });
         }
@@ -2392,13 +3038,20 @@ if __name__ == "__main__":
 
             let snippet = '';
             let thumbnailDataUrl = '';
+            let mediaMeta = '';
 
             if (chosenFile.isDemo && chosenFile.demoContent) {
                 snippet = chosenFile.demoContent.slice(0, 1500);
             } else if (chosenFile.fileObj) {
-                if (chosenFile.category === 'image' && chosenFile.size < 8 * 1024 * 1024) {
-                    thumbnailDataUrl = await generateImageThumbnailDataUrl(chosenFile.fileObj);
-                } else if (chosenFile.category === 'code' && chosenFile.size < 128 * 1024) {
+                if (chosenFile.category === 'image' && chosenFile.size < 20 * 1024 * 1024) {
+                    const imgRes = await generateImageThumbnailDataUrl(chosenFile.fileObj);
+                    thumbnailDataUrl = imgRes.dataUrl;
+                    mediaMeta = imgRes.meta;
+                } else if (chosenFile.category === 'video' && chosenFile.size < 150 * 1024 * 1024) {
+                    const vidRes = await generateVideoPosterDataUrl(chosenFile.fileObj);
+                    thumbnailDataUrl = vidRes.dataUrl;
+                    mediaMeta = vidRes.meta;
+                } else if (chosenFile.category === 'code' && chosenFile.size < 256 * 1024) {
                     try {
                         const txt = await chosenFile.fileObj.text();
                         if (!txt.includes('\u0000')) {
@@ -2417,6 +3070,7 @@ if __name__ == "__main__":
                 fileSize: chosenFile.size,
                 fileExt: chosenFile.ext || 'file',
                 category: chosenFile.category,
+                mediaMeta: mediaMeta,
                 isDemoSvg: chosenFile.isDemo && chosenFile.demoType === 'svg',
                 snippet: snippet,
                 thumbnailDataUrl: thumbnailDataUrl,
@@ -2429,6 +3083,30 @@ if __name__ == "__main__":
                 reveal: revealPayload
             });
         }
+
+        // Allow manual frame sharing from the MP4 video preview player to the multiplayer room
+        window.mpBroadcastCapturedFrame = (fileItem, frameDataUrl, currentTimeSec) => {
+            const revealPayload = {
+                room: currentRoomCode,
+                targetId: myUserId,
+                targetName: myNickname,
+                fileName: fileItem.name,
+                filePath: fileItem.path,
+                fileSize: fileItem.size,
+                fileExt: fileItem.ext || 'mp4',
+                category: 'video',
+                mediaMeta: `Captured Frame @ ${currentTimeSec.toFixed(1)}s`,
+                isDemoSvg: false,
+                snippet: '',
+                thumbnailDataUrl: frameDataUrl,
+                timestamp: Date.now(),
+                timeLabel: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+            };
+            sendMessageToHost({
+                type: 'SUBMIT_FILE_REVEAL',
+                reveal: revealPayload
+            });
+        };
 
         // --- Render Live Synced Reveal Stage & Feed ---
         function renderRevealsFeed() {
@@ -2444,9 +3122,13 @@ if __name__ == "__main__":
 
             let previewBodyHTML = '';
             if (latest.thumbnailDataUrl) {
+                const isVideo = latest.category === 'video';
                 previewBodyHTML = `
-                    <div class="w-full flex justify-center my-2">
-                        <img src="${latest.thumbnailDataUrl}" alt="${escapeHtml(latest.fileName)}" class="max-h-56 rounded-xl border border-slate-800 shadow-lg object-contain">
+                    <div class="w-full flex flex-col items-center my-2 relative">
+                        <div class="relative rounded-xl overflow-hidden border border-slate-800 shadow-lg">
+                            <img src="${latest.thumbnailDataUrl}" alt="${escapeHtml(latest.fileName)}" class="max-h-56 object-contain">
+                            ${isVideo ? `<div class="absolute bottom-2 right-2 px-2 py-0.5 rounded bg-purple-950/90 border border-purple-500/40 text-purple-200 text-[10px] font-mono font-bold flex items-center gap-1"><i class="fa-solid fa-film"></i> MP4 Frame</div>` : ''}
+                        </div>
                     </div>`;
             } else if (latest.isDemoSvg && latest.snippet) {
                 previewBodyHTML = `<div class="w-full max-w-md rounded-xl overflow-hidden border border-slate-800 my-2">${latest.snippet}</div>`;
@@ -2458,9 +3140,9 @@ if __name__ == "__main__":
                 <div class="w-full text-left space-y-2">
                     <div class="flex items-center justify-between gap-2">
                         <span class="text-[11px] font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
-                            <i class="fa-solid fa-gavel mr-1"></i> 2/3 Tribunal Opened File
+                            <i class="fa-solid fa-gavel mr-1"></i> 2/3 Tribunal Opened (.${escapeHtml((latest.fileExt || 'file').toUpperCase())})
                         </span>
-                        <span class="text-xs font-mono text-slate-400">${formatBytes(latest.fileSize || 0)}</span>
+                        <span class="text-xs font-mono text-slate-400">${latest.mediaMeta ? escapeHtml(latest.mediaMeta) + ' • ' : ''}${formatBytes(latest.fileSize || 0)}</span>
                     </div>
                     <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 flex items-center gap-3">
                         <div class="w-10 h-10 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-center text-lg shrink-0">
